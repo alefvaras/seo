@@ -3,7 +3,7 @@
  * Plugin Name: Akibara SEO Booster
  * Plugin URI: https://akibara.cl
  * Description: Plugin para mejorar el SEO de productos a 100 en Rank Math. Agrega enlaces externos por editorial y optimiza descripciones con contenido contextual.
- * Version: 2.0.0
+ * Version: 2.2.0
  * Author: Akibara Dev Team
  * Author URI: https://akibara.cl
  * License: GPL v2 or later
@@ -14,6 +14,17 @@
  * 2. Activar el plugin en WordPress
  * 3. Ir a Herramientas > Akibara SEO Booster
  * 4. Ejecutar las optimizaciones
+ *
+ * CAMBIOS v2.2.0:
+ * - Aliases para slugs cortos de editoriales (ivrea-arg, panini-esp, etc.)
+ * - Verificación exhaustiva contra base de datos real
+ * - Confirmado: PREVENTA_CATEGORY_ID = 215 correcto
+ * - Confirmado: Meta keys YITH/WC Pre-Orders correctas
+ *
+ * CAMBIOS v2.1.0:
+ * - Soporte para Comics y Manhwa
+ * - Templates por tipo de producto (manga/comics/manhwa)
+ * - URLs contextuales (/product-category/manga/, /comics/, /manga/manhwa/)
  *
  * CAMBIOS v2.0.0:
  * - Detección inteligente de productos en preventa vs disponibles
@@ -33,6 +44,28 @@ class Akibara_SEO_Booster {
      */
     const PREVENTA_CATEGORY_ID = 215;
     const PREVENTA_CATEGORY_SLUG = 'preventa';
+
+    /**
+     * Mapeo de aliases de slugs a slugs canónicos
+     * Esto permite matchear slugs cortos o variantes encontradas en la BD
+     */
+    private $slug_aliases = [
+        'ivrea-arg' => 'ivrea-argentina',
+        'panini-esp' => 'panini-espana',
+        'ivrea' => 'ivrea-espana',
+        'panini' => 'panini-espana',
+        'arechi' => 'arechi-manga',
+        'planeta' => 'planeta-espana',
+        'norma' => 'norma-editorial',
+        'milky' => 'milky-way',
+        'milkyway' => 'milky-way',
+        'ecc' => 'ecc-ediciones',
+        'distrito' => 'distrito-manga',
+        'babylon' => 'ediciones-babylon',
+        'ooso' => 'ooso-comics',
+        'kitsune' => 'kitsune-books',
+        'satori' => 'satori-ediciones',
+    ];
 
     /**
      * Mapeo de editoriales a sus sitios web oficiales
@@ -552,7 +585,7 @@ class Akibara_SEO_Booster {
         $stats = $this->get_product_stats();
         ?>
         <div class="wrap akibara-seo-wrap">
-            <h1>Akibara SEO Booster v2.0</h1>
+            <h1>Akibara SEO Booster v2.2</h1>
             <p>Optimiza tus productos para alcanzar 100/100 en Rank Math SEO</p>
 
             <!-- Alerta si hay problemas de texto contextual -->
@@ -1039,7 +1072,7 @@ class Akibara_SEO_Booster {
         $is_preorder = $this->is_product_preorder($product_id);
 
         // Construir contenido adicional
-        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.1 -->\n";
+        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.2 -->\n";
         $additional_content .= "<div class=\"seo-description\">\n";
 
         // Encabezado contextual según TIPO (manga/comics/manhwa) y ESTADO (preventa/disponible)
@@ -1135,12 +1168,28 @@ class Akibara_SEO_Booster {
     }
 
     /**
-     * Normalizar slug de editorial
+     * Normalizar slug de editorial y resolver aliases
+     *
+     * @param string $slug Slug original
+     * @return string Slug normalizado y resuelto
      */
     private function normalize_slug($slug) {
         $slug = strtolower($slug);
         $slug = str_replace(['_', ' '], '-', $slug);
         $slug = preg_replace('/[^a-z0-9-]/', '', $slug);
+
+        // Resolver alias si existe
+        if (isset($this->slug_aliases[$slug])) {
+            return $this->slug_aliases[$slug];
+        }
+
+        // Buscar match parcial en aliases
+        foreach ($this->slug_aliases as $alias => $canonical) {
+            if (strpos($slug, $alias) !== false || strpos($alias, $slug) !== false) {
+                return $canonical;
+            }
+        }
+
         return $slug;
     }
 
@@ -1208,7 +1257,7 @@ add_action('plugins_loaded', 'akibara_seo_booster_init');
 // Activación
 register_activation_hook(__FILE__, function() {
     add_option('akibara_seo_auto_enhance', false);
-    add_option('akibara_seo_version', '2.0.0');
+    add_option('akibara_seo_version', '2.2.0');
 });
 
 // Desactivación
