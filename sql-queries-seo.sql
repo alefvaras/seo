@@ -210,7 +210,78 @@ AND meta_value NOT LIKE 'Comprar%';
 */
 
 -- ============================================
--- 8. LIMPIEZA Y ROLLBACK
+-- 8. ELIMINAR TEXTO "EXPLORA MÁS TÍTULOS..."
+-- ============================================
+
+-- Ver productos que tienen el texto (para verificar antes de eliminar)
+SELECT
+    ID,
+    post_title,
+    post_content
+FROM wp_posts
+WHERE post_type = 'product'
+AND post_status = 'publish'
+AND post_content LIKE '%Explora más títulos en nuestra%';
+
+-- ELIMINAR: Variante completa con preventas (párrafo con clase)
+UPDATE wp_posts
+SET post_content = REGEXP_REPLACE(
+    post_content,
+    '<p[^>]*>Explora más títulos en nuestra <a[^>]*>colección de manga</a> o visita nuestras <a[^>]*>preventas</a>\\.</p>',
+    ''
+)
+WHERE post_type = 'product'
+AND post_content LIKE '%Explora más títulos en nuestra%';
+
+-- ELIMINAR: Variante solo con colección de manga
+UPDATE wp_posts
+SET post_content = REGEXP_REPLACE(
+    post_content,
+    '<p[^>]*>Explora más títulos en nuestra <a[^>]*>colección de manga</a>\\.</p>',
+    ''
+)
+WHERE post_type = 'product'
+AND post_content LIKE '%Explora más títulos en nuestra%';
+
+-- ELIMINAR: Variante con colección de cómics
+UPDATE wp_posts
+SET post_content = REGEXP_REPLACE(
+    post_content,
+    '<p[^>]*>Explora más títulos en nuestra <a[^>]*>colección de cómics</a>[^<]*</p>',
+    ''
+)
+WHERE post_type = 'product'
+AND post_content LIKE '%Explora más títulos en nuestra%';
+
+-- ELIMINAR: Variante con catálogo
+UPDATE wp_posts
+SET post_content = REGEXP_REPLACE(
+    post_content,
+    '<p[^>]*>Explora más títulos en nuestra <a[^>]*>catálogo</a>[^<]*</p>',
+    ''
+)
+WHERE post_type = 'product'
+AND post_content LIKE '%Explora más títulos en nuestra%';
+
+-- ELIMINAR: Cualquier variante restante (más genérico)
+UPDATE wp_posts
+SET post_content = REGEXP_REPLACE(
+    post_content,
+    '<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>[^<]*Explora más títulos[^<]*</p>',
+    ''
+)
+WHERE post_type = 'product'
+AND post_content LIKE '%Explora más títulos%';
+
+-- Verificar después de la limpieza (debería dar 0 resultados)
+SELECT COUNT(*) as productos_con_texto_restante
+FROM wp_posts
+WHERE post_type = 'product'
+AND post_status = 'publish'
+AND post_content LIKE '%Explora más títulos en nuestra%';
+
+-- ============================================
+-- 9. LIMPIEZA Y ROLLBACK
 -- ============================================
 
 -- Ver productos modificados por el plugin (para posible rollback)
