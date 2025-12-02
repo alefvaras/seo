@@ -111,29 +111,68 @@ class Akibara_SEO_Booster {
     ];
 
     /**
-     * Plantillas de descripción extendida por género
-     * Ahora con variantes para PREVENTA y DISPONIBLE
+     * Plantillas de descripción extendida por género/tipo
+     * Incluye: Manga (shonen, seinen, shojo, josei, kodomo), Comics, Manhwa
      */
     private $description_templates = [
+        // MANGA - Géneros
         'shonen' => [
+            'type' => 'manga',
             'intro' => 'Sumérgete en una emocionante aventura con {title}, un manga shonen que te mantendrá al borde de tu asiento.',
             'content' => 'Esta obra maestra del manga combina acción trepidante, personajes memorables y una historia que no podrás dejar de leer. Ideal para fans del género shonen que buscan una experiencia de lectura intensa y emocionante.',
             'features' => 'Este tomo incluye ilustraciones de alta calidad, traducción profesional al español y papel de primera calidad para una experiencia de lectura óptima.',
         ],
         'seinen' => [
+            'type' => 'manga',
             'intro' => 'Descubre {title}, una obra madura y profunda que explora temas complejos con una narrativa excepcional.',
             'content' => 'Este manga seinen ofrece una experiencia de lectura sofisticada, con tramas elaboradas y desarrollo de personajes que te harán reflexionar. Perfecto para lectores adultos que buscan historias con profundidad.',
             'features' => 'Edición de coleccionista con papel de alta calidad, traducción cuidada y extras exclusivos.',
         ],
         'shojo' => [
+            'type' => 'manga',
             'intro' => '{title} es una historia cautivadora que te enamorará desde la primera página.',
             'content' => 'Este manga shojo combina romance, drama y personajes entrañables en una historia que toca el corazón. Una lectura perfecta para quienes buscan emociones y momentos inolvidables.',
             'features' => 'Edición especial con ilustraciones a color, papel premium y traducción oficial.',
         ],
-        'default' => [
+        'josei' => [
+            'type' => 'manga',
+            'intro' => '{title} es una obra que explora las complejidades de la vida adulta con sensibilidad y realismo.',
+            'content' => 'Este manga josei ofrece historias maduras y emotivas, con personajes complejos y situaciones que resonarán con lectores adultos. Perfecto para quienes buscan narrativas sofisticadas y emocionalmente profundas.',
+            'features' => 'Edición cuidada con traducción profesional, papel de calidad superior y encuadernación elegante.',
+        ],
+        'kodomo' => [
+            'type' => 'manga',
+            'intro' => '{title} es una aventura perfecta para los lectores más jóvenes de la familia.',
+            'content' => 'Este manga kodomo ofrece historias divertidas y educativas, con personajes entrañables y mensajes positivos. Ideal para iniciar a los más pequeños en el mundo del manga.',
+            'features' => 'Edición apta para todas las edades, con ilustraciones coloridas y texto fácil de leer.',
+        ],
+        // COMICS
+        'comics' => [
+            'type' => 'comics',
+            'intro' => 'Descubre {title}, un cómic imprescindible para cualquier coleccionista.',
+            'content' => 'Esta edición trae una de las mejores historias del mundo del cómic, con arte espectacular y una narrativa que te atrapará desde la primera página. Perfecto para fans del género que buscan calidad en cada viñeta.',
+            'features' => 'Incluye impresión de alta calidad, colores vibrantes, papel premium y encuadernación resistente para tu colección.',
+        ],
+        // MANHWA
+        'manhwa' => [
+            'type' => 'manhwa',
+            'intro' => 'Sumérgete en {title}, un manhwa coreano que te cautivará con su estilo único.',
+            'content' => 'Este manhwa ofrece una experiencia de lectura diferente, con el distintivo estilo artístico coreano y narrativas que combinan lo mejor de oriente y occidente. Una obra que destaca por su originalidad y calidad visual.',
+            'features' => 'Edición oficial con traducción profesional al español, formato de lectura tradicional y papel de alta calidad.',
+        ],
+        // DEFAULT - Manga genérico
+        'manga' => [
+            'type' => 'manga',
             'intro' => 'Descubre {title}, una obra imprescindible para cualquier amante del manga.',
             'content' => 'Esta edición oficial trae una de las mejores historias del género, con una narrativa cautivadora y un arte visual impresionante que te transportará a un mundo único.',
             'features' => 'Incluye traducción profesional al español, papel de alta calidad y encuadernación resistente para tu colección.',
+        ],
+        // DEFAULT - Genérico
+        'default' => [
+            'type' => 'general',
+            'intro' => 'Descubre {title}, una obra imprescindible para tu colección.',
+            'content' => 'Esta edición oficial ofrece una experiencia de lectura excepcional, con narrativa cautivadora y arte visual impresionante.',
+            'features' => 'Incluye traducción profesional al español, papel de alta calidad y encuadernación resistente.',
         ]
     ];
 
@@ -257,16 +296,67 @@ class Akibara_SEO_Booster {
 
     /**
      * =====================================================
+     * DETECCIÓN DE TIPO DE PRODUCTO (MANGA/COMICS/MANHWA)
+     * =====================================================
+     */
+
+    /**
+     * Detectar el tipo principal del producto
+     *
+     * @param int $product_id ID del producto
+     * @return array ['type' => 'manga|comics|manhwa', 'genre' => 'shonen|seinen|...', 'label' => 'Manga|Comics|Manhwa']
+     */
+    public function get_product_type($product_id) {
+        $categories = wp_get_post_terms($product_id, 'product_cat', ['fields' => 'slugs']);
+
+        if (is_wp_error($categories)) {
+            return ['type' => 'general', 'genre' => 'default', 'label' => 'producto'];
+        }
+
+        // Verificar si es Comics
+        if (in_array('comics', $categories)) {
+            return ['type' => 'comics', 'genre' => 'comics', 'label' => 'cómics'];
+        }
+
+        // Verificar si es Manhwa
+        if (in_array('manhwa', $categories)) {
+            return ['type' => 'manhwa', 'genre' => 'manhwa', 'label' => 'manhwa'];
+        }
+
+        // Verificar si es Manga (con género específico)
+        if (in_array('manga', $categories)) {
+            // Buscar género específico
+            foreach (['shonen', 'seinen', 'shojo', 'josei', 'kodomo'] as $genre) {
+                if (in_array($genre, $categories)) {
+                    return ['type' => 'manga', 'genre' => $genre, 'label' => 'manga'];
+                }
+            }
+            return ['type' => 'manga', 'genre' => 'manga', 'label' => 'manga'];
+        }
+
+        // Verificar géneros directamente (sin categoría padre manga)
+        foreach (['shonen', 'seinen', 'shojo', 'josei', 'kodomo'] as $genre) {
+            if (in_array($genre, $categories)) {
+                return ['type' => 'manga', 'genre' => $genre, 'label' => 'manga'];
+            }
+        }
+
+        return ['type' => 'general', 'genre' => 'default', 'label' => 'producto'];
+    }
+
+    /**
+     * =====================================================
      * GENERACIÓN DE CONTENIDO CONTEXTUAL
      * =====================================================
      */
 
     /**
-     * Generar el texto final contextual según el estado del producto
+     * Generar el texto final contextual según el estado y TIPO del producto
      *
      * IMPORTANTE: Este es el texto que aparece al final de la descripción
      * - Si es PREVENTA: NO mencionar "visita nuestras preventas" (ya es preventa)
      * - Si es DISPONIBLE: Puede mencionar preventas
+     * - Adaptar enlaces según tipo: manga, comics, manhwa
      *
      * @param int $product_id ID del producto
      * @return string HTML del texto contextual
@@ -274,6 +364,29 @@ class Akibara_SEO_Booster {
     public function generate_contextual_footer($product_id) {
         $is_preorder = $this->is_product_preorder($product_id);
         $preorder_date = $this->get_preorder_date($product_id);
+        $product_type = $this->get_product_type($product_id);
+
+        // Determinar el enlace y texto según el tipo de producto
+        $type_links = [
+            'manga' => [
+                'url' => '/product-category/manga/',
+                'text' => 'colección de manga'
+            ],
+            'comics' => [
+                'url' => '/product-category/comics/',
+                'text' => 'colección de cómics'
+            ],
+            'manhwa' => [
+                'url' => '/product-category/manga/manhwa/',
+                'text' => 'colección de manhwa'
+            ],
+            'general' => [
+                'url' => '/tienda/',
+                'text' => 'catálogo'
+            ]
+        ];
+
+        $link_data = $type_links[$product_type['type']] ?? $type_links['general'];
 
         if ($is_preorder) {
             // PRODUCTO EN PREVENTA
@@ -283,12 +396,12 @@ class Akibara_SEO_Booster {
                 $text .= "Este producto estará disponible a partir del <strong>{$preorder_date}</strong>. ";
             }
 
-            $text .= 'Explora más títulos en nuestra <a href="/product-category/manga/">colección de manga</a>.';
+            $text .= 'Explora más títulos en nuestra <a href="' . $link_data['url'] . '">' . $link_data['text'] . '</a>.';
             $text .= '</p>';
         } else {
             // PRODUCTO DISPONIBLE
             $text = '<p class="akibara-contextual-footer">';
-            $text .= 'Explora más títulos en nuestra <a href="/product-category/manga/">colección de manga</a> ';
+            $text .= 'Explora más títulos en nuestra <a href="' . $link_data['url'] . '">' . $link_data['text'] . '</a> ';
             $text .= 'o visita nuestras <a href="/product-category/preventa/">preventas</a>.';
             $text .= '</p>';
         }
@@ -914,37 +1027,38 @@ class Akibara_SEO_Booster {
             return null;
         }
 
-        // Determinar el género/categoría del producto
-        $categories = wp_get_post_terms($product_id, 'product_cat', ['fields' => 'slugs']);
-        $genre = 'default';
+        // Detectar tipo y género del producto usando la nueva función
+        $product_type_info = $this->get_product_type($product_id);
+        $genre = $product_type_info['genre'];
+        $type = $product_type_info['type'];
+        $type_label = $product_type_info['label'];
 
-        if (!is_wp_error($categories)) {
-            foreach (['shonen', 'seinen', 'shojo', 'josei', 'kodomo'] as $g) {
-                if (in_array($g, $categories)) {
-                    $genre = $g;
-                    break;
-                }
-            }
-        }
-
-        // Usar plantilla según género
+        // Usar plantilla según género/tipo
         $template = $this->description_templates[$genre] ?? $this->description_templates['default'];
         $product_name = get_the_title($product_id);
         $is_preorder = $this->is_product_preorder($product_id);
 
         // Construir contenido adicional
-        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2 -->\n";
+        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.1 -->\n";
         $additional_content .= "<div class=\"seo-description\">\n";
 
-        // Encabezado contextual
+        // Encabezado contextual según TIPO (manga/comics/manhwa) y ESTADO (preventa/disponible)
+        $type_titles = [
+            'manga' => 'manga',
+            'comics' => 'cómic',
+            'manhwa' => 'manhwa',
+            'general' => 'producto'
+        ];
+        $title_type = $type_titles[$type] ?? 'producto';
+
         if ($is_preorder) {
-            $additional_content .= "<h3>Sobre este manga (Preventa)</h3>\n";
+            $additional_content .= "<h3>Sobre este {$title_type} (Preventa)</h3>\n";
             $preorder_date = $this->get_preorder_date($product_id);
             if ($preorder_date) {
                 $additional_content .= "<p><strong>Disponible a partir del {$preorder_date}</strong></p>\n";
             }
         } else {
-            $additional_content .= "<h3>Sobre este manga</h3>\n";
+            $additional_content .= "<h3>Sobre este {$title_type}</h3>\n";
         }
 
         $additional_content .= "<p>" . str_replace('{title}', $product_name, $template['intro']) . "</p>\n";
