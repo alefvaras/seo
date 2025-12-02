@@ -3,7 +3,7 @@
  * Plugin Name: Akibara SEO Booster
  * Plugin URI: https://akibara.cl
  * Description: Plugin para mejorar el SEO de productos a 100 en Rank Math. Agrega enlaces externos por editorial y optimiza descripciones con contenido contextual.
- * Version: 2.2.0
+ * Version: 2.3.0
  * Author: Akibara Dev Team
  * Author URI: https://akibara.cl
  * License: GPL v2 or later
@@ -14,6 +14,12 @@
  * 2. Activar el plugin en WordPress
  * 3. Ir a Herramientas > Akibara SEO Booster
  * 4. Ejecutar las optimizaciones
+ *
+ * CAMBIOS v2.3.0:
+ * - Nueva función para limpiar secciones obsoletas de productos
+ * - Detecta y remueve: "Sobre este manga (Preventa)", "Detalles del producto", etc.
+ * - Nueva estadística "Secciones Obsoletas" en el panel de administración
+ * - Checkbox "Limpiar Secciones Obsoletas" en opciones de optimización
  *
  * CAMBIOS v2.2.0:
  * - Aliases para slugs cortos de editoriales (ivrea-arg, panini-esp, etc.)
@@ -865,6 +871,134 @@ class Akibara_SEO_Booster {
 
     /**
      * =====================================================
+     * LIMPIEZA DE SECCIONES OBSOLETAS
+     * =====================================================
+     */
+
+    /**
+     * Verificar si un producto tiene secciones obsoletas del formato antiguo
+     * Detecta: "Sobre este manga (Preventa)", "Detalles del producto", texto contextual
+     *
+     * @param int $product_id ID del producto
+     * @return bool True si tiene contenido obsoleto
+     */
+    public function has_legacy_sections($product_id) {
+        $post = get_post($product_id);
+        if (!$post) {
+            return false;
+        }
+        $content = $post->post_content;
+
+        // Patrones de secciones obsoletas a detectar
+        $legacy_patterns = [
+            // Encabezado "Sobre este manga/cómic/manhwa" con o sin "(Preventa)"
+            '/<h[23]>Sobre este (manga|cómic|comic|manhwa|producto)(\s*\(Preventa\))?<\/h[23]>/i',
+            // Sección "Detalles del producto" con lista
+            '/<h[23]>Detalles del producto<\/h[23]>/i',
+            // Párrafo de fecha de preventa
+            '/<p><strong>Disponible a partir del [^<]+<\/strong><\/p>/i',
+            // Lista con Estado: Preventa o Disponible
+            '/<li><strong>Estado:<\/strong>\s*(Preventa|Disponible)<\/li>/i',
+            // Texto contextual "Explora más títulos..." con link a preventas
+            '/Explora más títulos en nuestra.*?preventas<\/a>\./is',
+            // Footer contextual viejo
+            '/<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>.*?<\/p>/is',
+        ];
+
+        foreach ($legacy_patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Limpiar secciones obsoletas de un producto
+     *
+     * @param int $product_id ID del producto
+     * @param bool $preview Solo verificar, no modificar
+     * @return string|null Descripción del cambio o null
+     */
+    public function clean_legacy_sections($product_id, $preview = false) {
+        if (!$this->has_legacy_sections($product_id)) {
+            return null;
+        }
+
+        $post = get_post($product_id);
+        $content = $post->post_content;
+        $original_content = $content;
+        $changes = [];
+
+        // 1. Remover encabezado "Sobre este manga/cómic/manhwa" con o sin "(Preventa)"
+        $pattern = '/<h[23]>Sobre este (manga|cómic|comic|manhwa|producto)(\s*\(Preventa\))?<\/h[23]>\s*/i';
+        if (preg_match($pattern, $content)) {
+            $content = preg_replace($pattern, '', $content);
+            $changes[] = 'Removido "Sobre este..."';
+        }
+
+        // 2. Remover párrafo de fecha de preventa
+        $pattern = '/<p><strong>Disponible a partir del [^<]+<\/strong><\/p>\s*/i';
+        if (preg_match($pattern, $content)) {
+            $content = preg_replace($pattern, '', $content);
+            $changes[] = 'Removida fecha de preventa';
+        }
+
+        // 3. Remover sección completa "Detalles del producto" con su lista
+        $pattern = '/<h[23]>Detalles del producto<\/h[23]>\s*<ul>.*?<\/ul>\s*/is';
+        if (preg_match($pattern, $content)) {
+            $content = preg_replace($pattern, '', $content);
+            $changes[] = 'Removido "Detalles del producto"';
+        }
+
+        // 4. Remover footer contextual con clase
+        $pattern = '/<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>.*?<\/p>\s*/is';
+        if (preg_match($pattern, $content)) {
+            $content = preg_replace($pattern, '', $content);
+            $changes[] = 'Removido footer contextual';
+        }
+
+        // 5. Remover texto "Explora más títulos..." (varias variantes)
+        $patterns = [
+            '/<p>Explora más títulos en nuestra.*?preventas<\/a>\.<\/p>\s*/is',
+            '/<p>Explora más títulos en nuestra.*?manga<\/a>\.<\/p>\s*/is',
+            '/Explora más títulos en nuestra <a[^>]*>[^<]+<\/a>( o visita nuestras <a[^>]*>preventas<\/a>)?\.\s*/is',
+        ];
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+                $content = preg_replace($pattern, '', $content);
+                $changes[] = 'Removido texto "Explora más..."';
+                break;
+            }
+        }
+
+        // Si no hay cambios, retornar null
+        if (empty($changes) || $content === $original_content) {
+            return null;
+        }
+
+        // Limpiar espacios en blanco múltiples y líneas vacías
+        $content = preg_replace('/\n{3,}/', "\n\n", $content);
+        $content = trim($content);
+
+        if (!$preview) {
+            wp_update_post([
+                'ID' => $product_id,
+                'post_content' => $content
+            ]);
+
+            update_post_meta($product_id, '_akibara_legacy_cleaned', [
+                'date' => current_time('mysql'),
+                'changes' => $changes
+            ]);
+        }
+
+        return implode(', ', $changes);
+    }
+
+    /**
+     * =====================================================
      * AGREGAR MENÚ DE ADMINISTRACIÓN
      * =====================================================
      */
@@ -924,8 +1058,16 @@ class Akibara_SEO_Booster {
         $stats = $this->get_product_stats();
         ?>
         <div class="wrap akibara-seo-wrap">
-            <h1>Akibara SEO Booster v2.2</h1>
+            <h1>Akibara SEO Booster v2.3</h1>
             <p>Optimiza tus productos para alcanzar 100/100 en Rank Math SEO</p>
+
+            <!-- Alerta si hay secciones obsoletas -->
+            <?php if ($stats['legacy_sections'] > 0): ?>
+            <div class="akibara-alert akibara-alert-warning">
+                <strong>Atención:</strong> Se encontraron <strong><?php echo $stats['legacy_sections']; ?></strong> productos con secciones obsoletas
+                ("Sobre este manga", "Detalles del producto", etc.). Marca "Limpiar Secciones Obsoletas" y ejecuta la optimización.
+            </div>
+            <?php endif; ?>
 
             <!-- Alerta si hay problemas de texto contextual -->
             <?php if ($stats['contextual_issues'] > 0): ?>
@@ -954,6 +1096,10 @@ class Akibara_SEO_Booster {
                     <div class="akibara-stat-box <?php echo $stats['contextual_issues'] > 0 ? 'error' : 'success'; ?>">
                         <div class="number"><?php echo esc_html($stats['contextual_issues']); ?></div>
                         <div class="label">Texto Contextual Incorrecto</div>
+                    </div>
+                    <div class="akibara-stat-box <?php echo $stats['legacy_sections'] > 0 ? 'error' : 'success'; ?>">
+                        <div class="number"><?php echo esc_html($stats['legacy_sections']); ?></div>
+                        <div class="label">Secciones Obsoletas</div>
                     </div>
                     <div class="akibara-stat-box">
                         <div class="number"><?php echo esc_html($stats['without_external_links']); ?></div>
@@ -1014,6 +1160,15 @@ class Akibara_SEO_Booster {
                                 Corregir texto según estado (preventa/disponible)
                             </label>
                             <p class="description">Arregla el texto "Explora más títulos..." para que sea coherente.</p>
+                        </div>
+
+                        <div>
+                            <h3>Limpiar Secciones Obsoletas</h3>
+                            <label>
+                                <input type="checkbox" name="clean_legacy" value="1" checked>
+                                Remover contenido obsoleto del formato antiguo
+                            </label>
+                            <p class="description">Elimina "Sobre este manga (Preventa)", "Detalles del producto", etc.</p>
                         </div>
 
                         <div>
@@ -1156,6 +1311,7 @@ class Akibara_SEO_Booster {
             'preorder' => 0,
             'available' => 0,
             'contextual_issues' => 0,
+            'legacy_sections' => 0,
             'without_external_links' => 0,
             'short_content' => 0
         ];
@@ -1179,6 +1335,11 @@ class Akibara_SEO_Booster {
             // Contar problemas de texto contextual
             if ($this->has_contextual_text_issue($product_id)) {
                 $stats['contextual_issues']++;
+            }
+
+            // Contar productos con secciones obsoletas
+            if ($this->has_legacy_sections($product_id)) {
+                $stats['legacy_sections']++;
             }
 
             // Sin enlaces externos
@@ -1214,6 +1375,7 @@ class Akibara_SEO_Booster {
         $add_external_links = isset($_POST['add_external_links']);
         $expand_description = isset($_POST['expand_description']);
         $fix_contextual = isset($_POST['fix_contextual']);
+        $clean_legacy = isset($_POST['clean_legacy']);
         $filter_brand = intval($_POST['filter_brand'] ?? 0);
         $filter_status = sanitize_text_field($_POST['filter_status'] ?? '');
         $limit = min(500, max(1, intval($_POST['limit'] ?? 50)));
@@ -1262,7 +1424,15 @@ class Akibara_SEO_Booster {
             $status = $this->get_product_status($product_id);
             $changes = [];
 
-            // 1. Corregir texto contextual
+            // 1. Limpiar secciones obsoletas (debe ejecutarse primero)
+            if ($clean_legacy) {
+                $result = $this->clean_legacy_sections($product_id, $is_preview);
+                if ($result) {
+                    $changes[] = $result;
+                }
+            }
+
+            // 2. Corregir texto contextual
             if ($fix_contextual) {
                 $result = $this->fix_contextual_text($product_id, $is_preview);
                 if ($result) {
@@ -1270,7 +1440,7 @@ class Akibara_SEO_Booster {
                 }
             }
 
-            // 2. Agregar enlace externo
+            // 3. Agregar enlace externo
             if ($add_external_links) {
                 $result = $this->add_external_link_to_product($product_id, $is_preview);
                 if ($result) {
@@ -1278,7 +1448,7 @@ class Akibara_SEO_Booster {
                 }
             }
 
-            // 3. Expandir descripción
+            // 4. Expandir descripción
             if ($expand_description) {
                 $result = $this->expand_product_description($product_id, $is_preview);
                 if ($result) {
@@ -1408,7 +1578,7 @@ class Akibara_SEO_Booster {
         $product_name = get_the_title($product_id);
 
         // Construir contenido adicional
-        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.2 -->\n";
+        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.3 -->\n";
         $additional_content .= "<div class=\"seo-description\">\n";
 
         // Contenido SEO sin encabezados ni detalles del producto
