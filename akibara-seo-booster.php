@@ -50,12 +50,14 @@ class Akibara_SEO_Booster {
      * Esto permite matchear slugs cortos o variantes encontradas en la BD
      */
     private $slug_aliases = [
-        'ivrea-arg' => 'ivrea-argentina',
-        'panini-esp' => 'panini-espana',
+        // España
+        'ivrea-esp' => 'ivrea-espana',
         'ivrea' => 'ivrea-espana',
+        'panini-esp' => 'panini-espana',
         'panini' => 'panini-espana',
         'arechi' => 'arechi-manga',
-        'planeta' => 'planeta-espana',
+        'planeta' => 'planeta-comic',
+        'planeta-espana' => 'planeta-comic',
         'norma' => 'norma-editorial',
         'milky' => 'milky-way',
         'milkyway' => 'milky-way',
@@ -65,38 +67,84 @@ class Akibara_SEO_Booster {
         'ooso' => 'ooso-comics',
         'kitsune' => 'kitsune-books',
         'satori' => 'satori-ediciones',
+        'selecta' => 'selecta-vision',
+        'dolmen' => 'dolmen-editorial',
+        'cupula' => 'la-cupula',
+        'ponent' => 'ponent-mon',
+        'fandogamia-editorial' => 'fandogamia',
+        'now-comics' => 'now-evolution',
+        'spaceman' => 'spaceman-project',
+        'herder' => 'herder-editorial',
+        'penguin-espana' => 'penguin-random-house-espana',
+        'prh-espana' => 'penguin-random-house-espana',
+        'planeta-libros' => 'planeta-libros-espana',
+        'sm' => 'sm-espana',
+        'gigamesh' => 'ediciones-gigamesh',
+        'nocturna' => 'nocturna-ediciones',
+        'alianza' => 'alianza-editorial',
+        'tusquets' => 'tusquets-editores',
+        'seix' => 'seix-barral',
+        // Argentina
+        'ivrea-arg' => 'ivrea-argentina',
+        'panini-arg' => 'panini-argentina',
+        'ovni' => 'ovni-press',
+        'utopia' => 'utopia-editorial',
+        'larp' => 'larp-editores',
+        'deux-editorial' => 'deux',
+        'planeta-arg' => 'planeta-argentina',
+        'penguin-argentina' => 'penguin-random-house-argentina',
+        'prh-argentina' => 'penguin-random-house-argentina',
+        'ateneo' => 'el-ateneo',
+        'siglo-xxi' => 'siglo-xxi-argentina',
+        'godot' => 'ediciones-godot',
+        'hotel-ideas' => 'hotel-de-las-ideas',
+        // México
+        'panini-mx' => 'panini-mexico',
+        'panini-mex' => 'panini-mexico',
+        'kamite-manga' => 'kamite',
+        'smash' => 'smash-manga',
+        'vid-manga' => 'vid',
+        'editorial-vid' => 'vid',
+        'distrito-mx' => 'distrito-manga-mexico',
+        'penguin-mexico' => 'penguin-random-house-mexico',
+        'prh-mexico' => 'penguin-random-house-mexico',
+        'planeta-mx' => 'planeta-mexico',
+        'oceano' => 'oceano-mexico',
+        'fce' => 'fondo-cultura-economica',
+        'fondo-cultura' => 'fondo-cultura-economica',
+        'sexto' => 'sexto-piso',
+        'almadia-editorial' => 'almadia',
+        'era-editorial' => 'era',
+        'tusquets-mx' => 'tusquets-mexico',
+        'anagrama' => 'anagrama-mexico',
+        'grijalbo' => 'grijalbo-mexico',
+        'televisa' => 'editorial-televisa',
     ];
 
     /**
      * Mapeo de editoriales a sus sitios web oficiales
+     * Incluye editoriales de España, Argentina y México
      */
     private $editorial_links = [
+        // =====================================================
+        // ESPAÑA - Manga y Cómics
+        // =====================================================
         'ivrea-espana' => [
             'url' => 'https://ivrea.es',
             'name' => 'Ivrea España',
             'anchor_text' => 'Ivrea España (Editorial Oficial)'
-        ],
-        'ivrea-argentina' => [
-            'url' => 'https://www.ivrea.com.ar',
-            'name' => 'Ivrea Argentina',
-            'anchor_text' => 'Ivrea Argentina (Editorial Oficial)'
         ],
         'panini-espana' => [
             'url' => 'https://www.panini.es/shp_esp_es/comics.html',
             'name' => 'Panini España',
             'anchor_text' => 'Panini España (Editorial Oficial)'
         ],
-        'panini-argentina' => [
-            'url' => 'https://www.paninicomics.com.ar',
-            'name' => 'Panini Argentina',
-            'anchor_text' => 'Panini Argentina (Editorial Oficial)'
-        ],
         'arechi-manga' => [
             'url' => 'https://www.arechimanga.com',
             'name' => 'Arechi Manga',
             'anchor_text' => 'Arechi Manga (Editorial Oficial)'
         ],
-        'planeta-espana' => [
+        'planeta-comic' => [
             'url' => 'https://www.planetacomic.com',
             'name' => 'Planeta Cómic',
             'anchor_text' => 'Planeta Cómic (Editorial Oficial)'
@@ -140,6 +188,297 @@ class Akibara_SEO_Booster {
             'url' => 'https://satoriediciones.com',
             'name' => 'Satori Ediciones',
             'anchor_text' => 'Satori Ediciones (Editorial Oficial)'
+        ],
+        'selecta-vision' => [
+            'url' => 'https://www.selecta-vision.com',
+            'name' => 'Selecta Visión',
+            'anchor_text' => 'Selecta Visión (Editorial Oficial)'
+        ],
+        'dolmen-editorial' => [
+            'url' => 'https://www.dolmeneditorial.com',
+            'name' => 'Dolmen Editorial',
+            'anchor_text' => 'Dolmen Editorial (Editorial Oficial)'
+        ],
+        'salvat' => [
+            'url' => 'https://www.salvat.com',
+            'name' => 'Salvat',
+            'anchor_text' => 'Salvat (Editorial Oficial)'
+        ],
+        'la-cupula' => [
+            'url' => 'https://www.lacupula.com',
+            'name' => 'La Cúpula',
+            'anchor_text' => 'La Cúpula (Editorial Oficial)'
+        ],
+        'astiberri' => [
+            'url' => 'https://www.astiberri.com',
+            'name' => 'Astiberri',
+            'anchor_text' => 'Astiberri (Editorial Oficial)'
+        ],
+        'ponent-mon' => [
+            'url' => 'https://www.ponentmon.com',
+            'name' => 'Ponent Mon',
+            'anchor_text' => 'Ponent Mon (Editorial Oficial)'
+        ],
+        'dibbuks' => [
+            'url' => 'https://www.dibbuks.es',
+            'name' => 'Dibbuks',
+            'anchor_text' => 'Dibbuks (Editorial Oficial)'
+        ],
+        'tomodomo' => [
+            'url' => 'https://tomodomo.net',
+            'name' => 'Tomodomo',
+            'anchor_text' => 'Tomodomo (Editorial Oficial)'
+        ],
+        'fandogamia' => [
+            'url' => 'https://www.fandogamia.com',
+            'name' => 'Fandogamia',
+            'anchor_text' => 'Fandogamia (Editorial Oficial)'
+        ],
+        'moztros' => [
+            'url' => 'https://www.moztros.es',
+            'name' => 'Moztros',
+            'anchor_text' => 'Moztros (Editorial Oficial)'
+        ],
+        'letrablanka' => [
+            'url' => 'https://letrablanka.com',
+            'name' => 'Letrablanka',
+            'anchor_text' => 'Letrablanka (Editorial Oficial)'
+        ],
+        'now-evolution' => [
+            'url' => 'https://www.nowevolution.es',
+            'name' => 'Now Evolution',
+            'anchor_text' => 'Now Evolution (Editorial Oficial)'
+        ],
+        'spaceman-project' => [
+            'url' => 'https://www.spacemanproject.com',
+            'name' => 'Spaceman Project',
+            'anchor_text' => 'Spaceman Project (Editorial Oficial)'
+        ],
+        'herder-editorial' => [
+            'url' => 'https://www.herdereditorial.com',
+            'name' => 'Herder Editorial',
+            'anchor_text' => 'Herder Editorial (Editorial Oficial)'
+        ],
+        'penguin-random-house-espana' => [
+            'url' => 'https://www.penguinlibros.com',
+            'name' => 'Penguin Random House España',
+            'anchor_text' => 'Penguin Random House España (Editorial Oficial)'
+        ],
+        'planeta-libros-espana' => [
+            'url' => 'https://www.planetadelibros.com',
+            'name' => 'Planeta de Libros',
+            'anchor_text' => 'Planeta de Libros (Editorial Oficial)'
+        ],
+        'anaya' => [
+            'url' => 'https://www.anayainfantilyjuvenil.com',
+            'name' => 'Anaya',
+            'anchor_text' => 'Anaya (Editorial Oficial)'
+        ],
+        'sm-espana' => [
+            'url' => 'https://es.literaturasm.com',
+            'name' => 'SM España',
+            'anchor_text' => 'SM España (Editorial Oficial)'
+        ],
+        'ediciones-gigamesh' => [
+            'url' => 'https://www.gigamesh.com',
+            'name' => 'Ediciones Gigamesh',
+            'anchor_text' => 'Ediciones Gigamesh (Editorial Oficial)'
+        ],
+        'nova' => [
+            'url' => 'https://www.penguinlibros.com/es/nova',
+            'name' => 'Nova',
+            'anchor_text' => 'Nova (Editorial Oficial)'
+        ],
+        'minotauro' => [
+            'url' => 'https://www.planetadelibros.com/editorial/minotauro/18',
+            'name' => 'Minotauro',
+            'anchor_text' => 'Minotauro (Editorial Oficial)'
+        ],
+        'timun-mas' => [
+            'url' => 'https://www.planetadelibros.com/editorial/timun-mas/35',
+            'name' => 'Timun Mas',
+            'anchor_text' => 'Timun Mas (Editorial Oficial)'
+        ],
+        'nocturna-ediciones' => [
+            'url' => 'https://www.nocturnaediciones.com',
+            'name' => 'Nocturna Ediciones',
+            'anchor_text' => 'Nocturna Ediciones (Editorial Oficial)'
+        ],
+        'alianza-editorial' => [
+            'url' => 'https://www.alianzaeditorial.es',
+            'name' => 'Alianza Editorial',
+            'anchor_text' => 'Alianza Editorial (Editorial Oficial)'
+        ],
+        'tusquets-editores' => [
+            'url' => 'https://www.tusquetseditores.com',
+            'name' => 'Tusquets Editores',
+            'anchor_text' => 'Tusquets Editores (Editorial Oficial)'
+        ],
+        'seix-barral' => [
+            'url' => 'https://www.planetadelibros.com/editorial/seix-barral/5',
+            'name' => 'Seix Barral',
+            'anchor_text' => 'Seix Barral (Editorial Oficial)'
+        ],
+        // =====================================================
+        // ARGENTINA - Manga, Cómics y Libros
+        // =====================================================
+        'ivrea-argentina' => [
+            'url' => 'https://www.ivrea.com.ar',
+            'name' => 'Ivrea Argentina',
+            'anchor_text' => 'Ivrea Argentina (Editorial Oficial)'
+        ],
+        'panini-argentina' => [
+            'url' => 'https://www.paninicomics.com.ar',
+            'name' => 'Panini Argentina',
+            'anchor_text' => 'Panini Argentina (Editorial Oficial)'
+        ],
+        'ovni-press' => [
+            'url' => 'https://www.ovnipress.com.ar',
+            'name' => 'Ovni Press',
+            'anchor_text' => 'Ovni Press (Editorial Oficial)'
+        ],
+        'utopia-editorial' => [
+            'url' => 'https://www.utopiaeditorial.com.ar',
+            'name' => 'Utopía Editorial',
+            'anchor_text' => 'Utopía Editorial (Editorial Oficial)'
+        ],
+        'larp-editores' => [
+            'url' => 'https://www.larpeditores.com',
+            'name' => 'Larp Editores',
+            'anchor_text' => 'Larp Editores (Editorial Oficial)'
+        ],
+        'deux' => [
+            'url' => 'https://www.deuxeditora.com.ar',
+            'name' => 'Deux',
+            'anchor_text' => 'Deux (Editorial Oficial)'
+        ],
+        'planeta-argentina' => [
+            'url' => 'https://www.planetadelibros.com.ar',
+            'name' => 'Planeta Argentina',
+            'anchor_text' => 'Planeta Argentina (Editorial Oficial)'
+        ],
+        'penguin-random-house-argentina' => [
+            'url' => 'https://www.penguinlibros.com/ar',
+            'name' => 'Penguin Random House Argentina',
+            'anchor_text' => 'Penguin Random House Argentina (Editorial Oficial)'
+        ],
+        'sudamericana' => [
+            'url' => 'https://www.penguinlibros.com/ar/editorial/sudamericana',
+            'name' => 'Sudamericana',
+            'anchor_text' => 'Sudamericana (Editorial Oficial)'
+        ],
+        'emece' => [
+            'url' => 'https://www.planetadelibros.com.ar/editorial/emece/14',
+            'name' => 'Emecé',
+            'anchor_text' => 'Emecé (Editorial Oficial)'
+        ],
+        'el-ateneo' => [
+            'url' => 'https://www.editorialelateneo.com.ar',
+            'name' => 'El Ateneo',
+            'anchor_text' => 'El Ateneo (Editorial Oficial)'
+        ],
+        'siglo-xxi-argentina' => [
+            'url' => 'https://sigloxxieditores.com.ar',
+            'name' => 'Siglo XXI Argentina',
+            'anchor_text' => 'Siglo XXI Argentina (Editorial Oficial)'
+        ],
+        'ediciones-godot' => [
+            'url' => 'https://www.edicionesgodot.com.ar',
+            'name' => 'Ediciones Godot',
+            'anchor_text' => 'Ediciones Godot (Editorial Oficial)'
+        ],
+        'hotel-de-las-ideas' => [
+            'url' => 'https://hoteldelasideas.com.ar',
+            'name' => 'Hotel de las Ideas',
+            'anchor_text' => 'Hotel de las Ideas (Editorial Oficial)'
+        ],
+        'maten-al-mensajero' => [
+            'url' => 'https://www.matenalmensajero.com.ar',
+            'name' => 'Maten al Mensajero',
+            'anchor_text' => 'Maten al Mensajero (Editorial Oficial)'
+        ],
+        // =====================================================
+        // MÉXICO - Manga, Cómics y Libros
+        // =====================================================
+        'panini-mexico' => [
+            'url' => 'https://www.panini.com.mx',
+            'name' => 'Panini México',
+            'anchor_text' => 'Panini México (Editorial Oficial)'
+        ],
+        'kamite' => [
+            'url' => 'https://www.kamite.com.mx',
+            'name' => 'Kamite',
+            'anchor_text' => 'Kamite (Editorial Oficial)'
+        ],
+        'smash-manga' => [
+            'url' => 'https://www.smashmanga.com',
+            'name' => 'Smash Manga',
+            'anchor_text' => 'Smash Manga (Editorial Oficial)'
+        ],
+        'vid' => [
+            'url' => 'https://www.vid.com.mx',
+            'name' => 'Editorial Vid',
+            'anchor_text' => 'Editorial Vid (Editorial Oficial)'
+        ],
+        'distrito-manga-mexico' => [
+            'url' => 'https://www.distritomanga.com.mx',
+            'name' => 'Distrito Manga México',
+            'anchor_text' => 'Distrito Manga México (Editorial Oficial)'
+        ],
+        'penguin-random-house-mexico' => [
+            'url' => 'https://www.penguinlibros.com/mx',
+            'name' => 'Penguin Random House México',
+            'anchor_text' => 'Penguin Random House México (Editorial Oficial)'
+        ],
+        'planeta-mexico' => [
+            'url' => 'https://www.planetadelibros.com.mx',
+            'name' => 'Planeta México',
+            'anchor_text' => 'Planeta México (Editorial Oficial)'
+        ],
+        'oceano-mexico' => [
+            'url' => 'https://oceano.mx',
+            'name' => 'Océano México',
+            'anchor_text' => 'Océano México (Editorial Oficial)'
+        ],
+        'fondo-cultura-economica' => [
+            'url' => 'https://www.fondodeculturaeconomica.com',
+            'name' => 'Fondo de Cultura Económica',
+            'anchor_text' => 'Fondo de Cultura Económica (Editorial Oficial)'
+        ],
+        'sexto-piso' => [
+            'url' => 'https://sextopiso.mx',
+            'name' => 'Sexto Piso',
+            'anchor_text' => 'Sexto Piso (Editorial Oficial)'
+        ],
+        'almadia' => [
+            'url' => 'https://www.almadia.com.mx',
+            'name' => 'Almadía',
+            'anchor_text' => 'Almadía (Editorial Oficial)'
+        ],
+        'era' => [
+            'url' => 'https://www.edicionesera.com.mx',
+            'name' => 'Ediciones Era',
+            'anchor_text' => 'Ediciones Era (Editorial Oficial)'
+        ],
+        'tusquets-mexico' => [
+            'url' => 'https://www.planetadelibros.com.mx/editorial/tusquets-editores-mexico/64',
+            'name' => 'Tusquets México',
+            'anchor_text' => 'Tusquets México (Editorial Oficial)'
+        ],
+        'anagrama-mexico' => [
+            'url' => 'https://www.anagrama-ed.es',
+            'name' => 'Anagrama',
+            'anchor_text' => 'Anagrama (Editorial Oficial)'
+        ],
+        'grijalbo-mexico' => [
+            'url' => 'https://www.penguinlibros.com/mx/editorial/grijalbo',
+            'name' => 'Grijalbo México',
+            'anchor_text' => 'Grijalbo México (Editorial Oficial)'
+        ],
+        'editorial-televisa' => [
+            'url' => 'https://www.televisa.com/editorial',
+            'name' => 'Editorial Televisa',
+            'anchor_text' => 'Editorial Televisa (Editorial Oficial)'
         ]
     ];
 
