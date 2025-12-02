@@ -1128,6 +1128,14 @@ class Akibara_SEO_Booster {
                                 var cssClass = item.type || 'info';
                                 $('#akibara-log').append('<div class="' + cssClass + '">' + item.message + '</div>');
                             });
+
+                            // Recargar la página después de ejecutar (no en preview) para actualizar estadísticas
+                            if (action === 'execute') {
+                                $('#akibara-log').append('<div class="info">Recargando página para actualizar estadísticas...</div>');
+                                setTimeout(function() {
+                                    location.reload();
+                                }, 2000);
+                            }
                         } else {
                             $('#akibara-log').append('<div class="error">Error: ' + response.data.message + '</div>');
                         }
