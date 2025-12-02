@@ -3,7 +3,7 @@
  * Plugin Name: Akibara SEO Booster
  * Plugin URI: https://akibara.cl
  * Description: Plugin para mejorar el SEO de productos a 100 en Rank Math. Agrega enlaces externos por editorial y optimiza descripciones con contenido contextual.
- * Version: 2.3.0
+ * Version: 2.4.0
  * Author: Akibara Dev Team
  * Author URI: https://akibara.cl
  * License: GPL v2 or later
@@ -14,6 +14,11 @@
  * 2. Activar el plugin en WordPress
  * 3. Ir a Herramientas > Akibara SEO Booster
  * 4. Ejecutar las optimizaciones
+ *
+ * CAMBIOS v2.4.0:
+ * - Eliminada sección "Características de esta edición" del contenido expandido
+ * - Aumentado límite de productos de 500 a 10000 para procesar todos los productos
+ * - Valor por defecto del límite cambiado de 50 a 500
  *
  * CAMBIOS v2.3.0:
  * - Nueva función para limpiar secciones obsoletas de productos
@@ -1058,7 +1063,7 @@ class Akibara_SEO_Booster {
         $stats = $this->get_product_stats();
         ?>
         <div class="wrap akibara-seo-wrap">
-            <h1>Akibara SEO Booster v2.3</h1>
+            <h1>Akibara SEO Booster v2.4</h1>
             <p>Optimiza tus productos para alcanzar 100/100 en Rank Math SEO</p>
 
             <!-- Alerta si hay secciones obsoletas -->
@@ -1194,7 +1199,7 @@ class Akibara_SEO_Booster {
                             </select>
                             <br><br>
                             <label>Límite de productos:</label>
-                            <input type="number" name="limit" value="50" min="1" max="500">
+                            <input type="number" name="limit" value="500" min="1" max="10000">
                         </div>
                     </div>
 
@@ -1386,7 +1391,7 @@ class Akibara_SEO_Booster {
         $clean_legacy = isset($_POST['clean_legacy']);
         $filter_brand = intval($_POST['filter_brand'] ?? 0);
         $filter_status = sanitize_text_field($_POST['filter_status'] ?? '');
-        $limit = min(500, max(1, intval($_POST['limit'] ?? 50)));
+        $limit = min(10000, max(1, intval($_POST['limit'] ?? 500)));
 
         $log = [];
         $processed = 0;
@@ -1586,14 +1591,12 @@ class Akibara_SEO_Booster {
         $product_name = get_the_title($product_id);
 
         // Construir contenido adicional
-        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.3 -->\n";
+        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.4 -->\n";
         $additional_content .= "<div class=\"seo-description\">\n";
 
         // Contenido SEO sin encabezados ni detalles del producto
         $additional_content .= "<p>" . str_replace('{title}', $product_name, $template['intro']) . "</p>\n";
         $additional_content .= "<p>" . $template['content'] . "</p>\n";
-        $additional_content .= "<h3>Características de esta edición</h3>\n";
-        $additional_content .= "<p>" . $template['features'] . "</p>\n";
 
         $additional_content .= "</div>\n";
 
