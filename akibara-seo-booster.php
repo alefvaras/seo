@@ -1016,6 +1016,11 @@ class Akibara_SEO_Booster {
                 'post_content' => $content
             ]);
 
+            // Si se eliminó "Editorial:" antiguo, limpiar metadata para permitir re-añadir enlace
+            if (in_array('Removido "Editorial:" antiguo', $changes)) {
+                delete_post_meta($product_id, '_akibara_external_link_added');
+            }
+
             update_post_meta($product_id, '_akibara_legacy_cleaned', [
                 'date' => current_time('mysql'),
                 'changes' => $changes
@@ -1023,6 +1028,118 @@ class Akibara_SEO_Booster {
         }
 
         return implode(', ', $changes);
+    }
+
+    /**
+     * Verificar si un producto tiene metadata huérfana
+     *
+     * @param int $product_id ID del producto
+     * @return bool True si tiene metadata huérfana
+     */
+    public function has_orphan_metadata($product_id) {
+        $post = get_post($product_id);
+        if (!$post) {
+            return false;
+        }
+
+        $content = $post->post_content;
+
+        // Verificar meta de enlace externo huérfano
+        $external_link_meta = get_post_meta($product_id, '_akibara_external_link_added', true);
+        if ($external_link_meta) {
+            $has_editorial_link = preg_match('/<p[^>]*class=["\']?editorial-link["\']?/i', $content) ||
+                                  preg_match('/Conoce más sobre esta editorial/i', $content);
+            if (!$has_editorial_link) {
+                return true;
+            }
+        }
+
+        // Verificar meta de descripción expandida huérfana
+        $description_meta = get_post_meta($product_id, '_akibara_description_expanded', true);
+        if ($description_meta) {
+            $has_seo_content = preg_match('/<div[^>]*class=["\']?seo-description["\']?/i', $content) ||
+                               preg_match('/SEO Content Added by Akibara/i', $content);
+            if (!$has_seo_content) {
+                return true;
+            }
+        }
+
+        // Verificar meta de texto contextual huérfano
+        $contextual_meta = get_post_meta($product_id, '_akibara_contextual_text_fixed', true);
+        if ($contextual_meta) {
+            $has_contextual = preg_match('/<p[^>]*class=["\']?akibara-contextual-footer["\']?/i', $content);
+            if (!$has_contextual) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Limpiar metadata huérfana de productos
+     * Elimina meta keys que ya no tienen contenido asociado en el producto
+     *
+     * @param int $product_id ID del producto
+     * @param bool $preview Solo verificar, no modificar
+     * @return string|null Descripción del cambio o null
+     */
+    public function clean_orphan_metadata($product_id, $preview = false) {
+        $post = get_post($product_id);
+        if (!$post) {
+            return null;
+        }
+
+        $content = $post->post_content;
+        $cleaned = [];
+
+        // Verificar si tiene meta de enlace externo pero no tiene el enlace en contenido
+        $external_link_meta = get_post_meta($product_id, '_akibara_external_link_added', true);
+        if ($external_link_meta) {
+            // Buscar si el contenido tiene el enlace editorial
+            $has_editorial_link = preg_match('/<p[^>]*class=["\']?editorial-link["\']?/i', $content) ||
+                                  preg_match('/Conoce más sobre esta editorial/i', $content);
+
+            if (!$has_editorial_link) {
+                if (!$preview) {
+                    delete_post_meta($product_id, '_akibara_external_link_added');
+                }
+                $cleaned[] = 'Meta enlace externo huérfano';
+            }
+        }
+
+        // Verificar si tiene meta de descripción expandida pero no tiene el contenido
+        $description_meta = get_post_meta($product_id, '_akibara_description_expanded', true);
+        if ($description_meta) {
+            $has_seo_content = preg_match('/<div[^>]*class=["\']?seo-description["\']?/i', $content) ||
+                               preg_match('/SEO Content Added by Akibara/i', $content);
+
+            if (!$has_seo_content) {
+                if (!$preview) {
+                    delete_post_meta($product_id, '_akibara_description_expanded');
+                }
+                $cleaned[] = 'Meta descripción expandida huérfana';
+            }
+        }
+
+        // Verificar si tiene meta de texto contextual pero no tiene el contenido
+        $contextual_meta = get_post_meta($product_id, '_akibara_contextual_text_fixed', true);
+        if ($contextual_meta) {
+            $has_contextual = preg_match('/<p[^>]*class=["\']?akibara-contextual-footer["\']?/i', $content);
+
+            if (!$has_contextual) {
+                if (!$preview) {
+                    delete_post_meta($product_id, '_akibara_contextual_text_fixed');
+                }
+                $cleaned[] = 'Meta texto contextual huérfano';
+            }
+        }
+
+        if (empty($cleaned)) {
+            return null;
+        }
+
+        return implode(', ', $cleaned);
     }
 
     /**
@@ -1129,6 +1246,10 @@ class Akibara_SEO_Booster {
                         <div class="number"><?php echo esc_html($stats['legacy_sections']); ?></div>
                         <div class="label">Secciones Obsoletas</div>
                     </div>
+                    <div class="akibara-stat-box <?php echo $stats['orphan_metadata'] > 0 ? 'error' : 'success'; ?>">
+                        <div class="number"><?php echo esc_html($stats['orphan_metadata']); ?></div>
+                        <div class="label">Metadata Huérfana</div>
+                    </div>
                     <div class="akibara-stat-box">
                         <div class="number"><?php echo esc_html($stats['without_external_links']); ?></div>
                         <div class="label">Sin Enlaces Externos</div>
@@ -1196,7 +1317,16 @@ class Akibara_SEO_Booster {
                                 <input type="checkbox" name="clean_legacy" value="1" checked>
                                 Remover contenido obsoleto del formato antiguo
                             </label>
-                            <p class="description">Elimina "Sobre este manga (Preventa)", "Detalles del producto", etc.</p>
+                            <p class="description">Elimina "Sobre este manga (Preventa)", "Detalles del producto", "Editorial:", etc.</p>
+                        </div>
+
+                        <div>
+                            <h3>Limpiar Metadata Huérfana</h3>
+                            <label>
+                                <input type="checkbox" name="clean_orphan_meta" value="1" checked>
+                                Eliminar registros de base de datos sin contenido asociado
+                            </label>
+                            <p class="description">Limpia metadata de productos donde el contenido fue eliminado manualmente.</p>
                         </div>
 
                         <div>
@@ -1348,6 +1478,7 @@ class Akibara_SEO_Booster {
             'available' => 0,
             'contextual_issues' => 0,
             'legacy_sections' => 0,
+            'orphan_metadata' => 0,
             'without_external_links' => 0,
             'short_content' => 0
         ];
@@ -1376,6 +1507,11 @@ class Akibara_SEO_Booster {
             // Contar productos con secciones obsoletas
             if ($this->has_legacy_sections($product_id)) {
                 $stats['legacy_sections']++;
+            }
+
+            // Contar productos con metadata huérfana
+            if ($this->has_orphan_metadata($product_id)) {
+                $stats['orphan_metadata']++;
             }
 
             // Sin enlaces externos
@@ -1412,6 +1548,7 @@ class Akibara_SEO_Booster {
         $expand_description = isset($_POST['expand_description']);
         $fix_contextual = isset($_POST['fix_contextual']);
         $clean_legacy = isset($_POST['clean_legacy']);
+        $clean_orphan_meta = isset($_POST['clean_orphan_meta']);
         $filter_brand = intval($_POST['filter_brand'] ?? 0);
         $filter_status = sanitize_text_field($_POST['filter_status'] ?? '');
         $limit = min(10000, max(1, intval($_POST['limit'] ?? 500)));
@@ -1487,6 +1624,14 @@ class Akibara_SEO_Booster {
             // 4. Expandir descripción
             if ($expand_description) {
                 $result = $this->expand_product_description($product_id, $is_preview);
+                if ($result) {
+                    $changes[] = $result;
+                }
+            }
+
+            // 5. Limpiar metadata huérfana
+            if ($clean_orphan_meta) {
+                $result = $this->clean_orphan_metadata($product_id, $is_preview);
                 if ($result) {
                     $changes[] = $result;
                 }
