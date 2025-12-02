@@ -2,8 +2,8 @@
 /**
  * Plugin Name: Akibara SEO Booster
  * Plugin URI: https://akibara.cl
- * Description: Plugin para mejorar el SEO de productos a 100 en Rank Math. Agrega enlaces externos por editorial, power words, y optimiza descripciones.
- * Version: 1.0.0
+ * Description: Plugin para mejorar el SEO de productos a 100 en Rank Math. Agrega enlaces externos por editorial y optimiza descripciones con contenido contextual.
+ * Version: 2.0.0
  * Author: Akibara Dev Team
  * Author URI: https://akibara.cl
  * License: GPL v2 or later
@@ -14,6 +14,12 @@
  * 2. Activar el plugin en WordPress
  * 3. Ir a Herramientas > Akibara SEO Booster
  * 4. Ejecutar las optimizaciones
+ *
+ * CAMBIOS v2.0.0:
+ * - Detección inteligente de productos en preventa vs disponibles
+ * - Texto contextual diferente según estado del producto
+ * - Removida funcionalidad de power words (se maneja con badges)
+ * - Corregido el texto "Explora más títulos..." para ser contextual
  */
 
 if (!defined('ABSPATH')) {
@@ -23,12 +29,13 @@ if (!defined('ABSPATH')) {
 class Akibara_SEO_Booster {
 
     /**
+     * ID de la categoría de Preventa
+     */
+    const PREVENTA_CATEGORY_ID = 215;
+    const PREVENTA_CATEGORY_SLUG = 'preventa';
+
+    /**
      * Mapeo de editoriales a sus sitios web oficiales
-     * Formato: 'nombre_editorial' => [
-     *     'url' => 'sitio_oficial',
-     *     'name' => 'Nombre para mostrar',
-     *     'anchor_text' => 'Texto del enlace'
-     * ]
      */
     private $editorial_links = [
         'ivrea-espana' => [
@@ -104,18 +111,8 @@ class Akibara_SEO_Booster {
     ];
 
     /**
-     * Power words para SEO en español
-     * Organizadas por categoría
-     */
-    private $power_words = [
-        'urgencia' => ['Nuevo', 'Exclusivo', 'Últimas Unidades', 'Novedad', 'Ahora'],
-        'valor' => ['Comprar', 'Oferta', 'Mejor Precio', 'Original', 'Edición'],
-        'calidad' => ['Premium', 'Oficial', 'Auténtico', 'Colección', 'Especial'],
-        'accion' => ['Descubre', 'Consigue', 'Hazte con', 'Llévate', 'Adquiere']
-    ];
-
-    /**
      * Plantillas de descripción extendida por género
+     * Ahora con variantes para PREVENTA y DISPONIBLE
      */
     private $description_templates = [
         'shonen' => [
@@ -149,8 +146,7 @@ class Akibara_SEO_Booster {
         add_action('admin_init', [$this, 'handle_admin_actions']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_styles']);
 
-        // Hooks de frontend para mostrar enlaces externos
-        add_filter('woocommerce_product_description', [$this, 'append_external_link_to_description'], 10, 1);
+        // Hooks de frontend
         add_action('woocommerce_after_single_product_summary', [$this, 'display_external_editorial_link'], 15);
 
         // Hook para modificar el contenido del producto al guardar
@@ -159,11 +155,235 @@ class Akibara_SEO_Booster {
         // AJAX handlers
         add_action('wp_ajax_akibara_process_products', [$this, 'ajax_process_products']);
         add_action('wp_ajax_akibara_get_product_stats', [$this, 'ajax_get_product_stats']);
+        add_action('wp_ajax_akibara_fix_contextual_text', [$this, 'ajax_fix_contextual_text']);
     }
 
     /**
-     * Agregar menú de administración
+     * =====================================================
+     * DETECCIÓN DE ESTADO DEL PRODUCTO (PREVENTA/DISPONIBLE)
+     * =====================================================
      */
+
+    /**
+     * Verificar si un producto está en preventa
+     * Revisa múltiples fuentes: categoría, meta de YITH Pre-Order, etc.
+     *
+     * @param int $product_id ID del producto
+     * @return bool True si está en preventa
+     */
+    public function is_product_preorder($product_id) {
+        // 1. Verificar por categoría "Preventa"
+        if (has_term(self::PREVENTA_CATEGORY_SLUG, 'product_cat', $product_id)) {
+            return true;
+        }
+
+        // 2. Verificar por term_id de categoría Preventa
+        if (has_term(self::PREVENTA_CATEGORY_ID, 'product_cat', $product_id)) {
+            return true;
+        }
+
+        // 3. Verificar meta keys de YITH Pre-Order
+        $yith_preorder = get_post_meta($product_id, '_ywpo_preorder', true);
+        if ($yith_preorder === 'yes') {
+            return true;
+        }
+
+        // 4. Verificar si tiene fecha de pre-order de YITH
+        $yith_preorder_date = get_post_meta($product_id, '_ywpo_for_sale_date', true);
+        if (!empty($yith_preorder_date)) {
+            // Si la fecha es futura, está en preventa
+            if (strtotime($yith_preorder_date) > time()) {
+                return true;
+            }
+        }
+
+        // 5. Verificar meta key alternativa de YITH
+        $yith_release_date = get_post_meta($product_id, '_yith_pre_order_release_dat', true);
+        if (!empty($yith_release_date)) {
+            return true;
+        }
+
+        // 6. Verificar plugin WooCommerce Pre-Orders
+        $wc_preorder = get_post_meta($product_id, '_wc_pre_orders_enabled', true);
+        if ($wc_preorder === 'yes') {
+            return true;
+        }
+
+        // 7. Verificar por fecha de disponibilidad
+        $availability_date = get_post_meta($product_id, '_wc_pre_orders_availability_datetime', true);
+        if (!empty($availability_date) && strtotime($availability_date) > time()) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Obtener el estado del producto como texto
+     *
+     * @param int $product_id ID del producto
+     * @return string 'preventa' o 'disponible'
+     */
+    public function get_product_status($product_id) {
+        return $this->is_product_preorder($product_id) ? 'preventa' : 'disponible';
+    }
+
+    /**
+     * Obtener la fecha de disponibilidad de un producto en preventa
+     *
+     * @param int $product_id ID del producto
+     * @return string|null Fecha formateada o null
+     */
+    public function get_preorder_date($product_id) {
+        // Intentar obtener de YITH
+        $date = get_post_meta($product_id, '_ywpo_for_sale_date', true);
+        if (!empty($date)) {
+            return date_i18n('j \d\e F \d\e Y', strtotime($date));
+        }
+
+        $date = get_post_meta($product_id, '_yith_pre_order_release_dat', true);
+        if (!empty($date)) {
+            return date_i18n('j \d\e F \d\e Y', strtotime($date));
+        }
+
+        // Intentar obtener de WC Pre-Orders
+        $date = get_post_meta($product_id, '_wc_pre_orders_availability_datetime', true);
+        if (!empty($date)) {
+            return date_i18n('j \d\e F \d\e Y', strtotime($date));
+        }
+
+        return null;
+    }
+
+    /**
+     * =====================================================
+     * GENERACIÓN DE CONTENIDO CONTEXTUAL
+     * =====================================================
+     */
+
+    /**
+     * Generar el texto final contextual según el estado del producto
+     *
+     * IMPORTANTE: Este es el texto que aparece al final de la descripción
+     * - Si es PREVENTA: NO mencionar "visita nuestras preventas" (ya es preventa)
+     * - Si es DISPONIBLE: Puede mencionar preventas
+     *
+     * @param int $product_id ID del producto
+     * @return string HTML del texto contextual
+     */
+    public function generate_contextual_footer($product_id) {
+        $is_preorder = $this->is_product_preorder($product_id);
+        $preorder_date = $this->get_preorder_date($product_id);
+
+        if ($is_preorder) {
+            // PRODUCTO EN PREVENTA
+            $text = '<p class="akibara-contextual-footer">';
+
+            if ($preorder_date) {
+                $text .= "Este producto estará disponible a partir del <strong>{$preorder_date}</strong>. ";
+            }
+
+            $text .= 'Explora más títulos en nuestra <a href="/product-category/manga/">colección de manga</a>.';
+            $text .= '</p>';
+        } else {
+            // PRODUCTO DISPONIBLE
+            $text = '<p class="akibara-contextual-footer">';
+            $text .= 'Explora más títulos en nuestra <a href="/product-category/manga/">colección de manga</a> ';
+            $text .= 'o visita nuestras <a href="/product-category/preventa/">preventas</a>.';
+            $text .= '</p>';
+        }
+
+        return $text;
+    }
+
+    /**
+     * Verificar si el contenido tiene el texto problemático
+     * "visita nuestras preventas" en un producto que ES preventa
+     *
+     * @param int $product_id ID del producto
+     * @return bool True si hay inconsistencia
+     */
+    public function has_contextual_text_issue($product_id) {
+        $post = get_post($product_id);
+        $content = $post->post_content;
+
+        $is_preorder = $this->is_product_preorder($product_id);
+        $has_preventa_link = (
+            stripos($content, 'visita nuestras preventas') !== false ||
+            stripos($content, '/product-category/preventa/') !== false ||
+            stripos($content, 'preventas</a>') !== false
+        );
+
+        // Si es preventa Y tiene link a preventas = problema
+        if ($is_preorder && $has_preventa_link) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Corregir el texto contextual de un producto
+     *
+     * @param int $product_id ID del producto
+     * @param bool $preview Solo verificar, no modificar
+     * @return string|null Descripción del cambio o null
+     */
+    public function fix_contextual_text($product_id, $preview = false) {
+        if (!$this->has_contextual_text_issue($product_id)) {
+            return null;
+        }
+
+        $post = get_post($product_id);
+        $content = $post->post_content;
+        $original_content = $content;
+
+        // Patrones a buscar y reemplazar
+        $patterns = [
+            // Patrón completo con enlaces
+            '/<p[^>]*>Explora más títulos en nuestra <a[^>]*>colección de manga<\/a> o visita nuestras <a[^>]*>preventas<\/a>\.<\/p>/i',
+            // Patrón sin tags de párrafo
+            '/Explora más títulos en nuestra <a[^>]*>colección de manga<\/a> o visita nuestras <a[^>]*>preventas<\/a>\./i',
+            // Patrón con texto simple
+            '/Explora más títulos en nuestra colección de manga o visita nuestras preventas\./i',
+        ];
+
+        // Generar el nuevo texto contextual
+        $new_text = $this->generate_contextual_footer($product_id);
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+                $content = preg_replace($pattern, $new_text, $content);
+                break;
+            }
+        }
+
+        // Si el contenido no cambió, no hay nada que hacer
+        if ($content === $original_content) {
+            return null;
+        }
+
+        if (!$preview) {
+            wp_update_post([
+                'ID' => $product_id,
+                'post_content' => $content
+            ]);
+
+            update_post_meta($product_id, '_akibara_contextual_text_fixed', [
+                'date' => current_time('mysql'),
+                'status' => $this->get_product_status($product_id)
+            ]);
+        }
+
+        return "Texto contextual corregido (es preventa, no debe mencionar preventas)";
+    }
+
+    /**
+     * =====================================================
+     * AGREGAR MENÚ DE ADMINISTRACIÓN
+     * =====================================================
+     */
+
     public function add_admin_menu() {
         add_management_page(
             'Akibara SEO Booster',
@@ -174,9 +394,6 @@ class Akibara_SEO_Booster {
         );
     }
 
-    /**
-     * Estilos de administración
-     */
     public function enqueue_admin_styles($hook) {
         if ($hook !== 'tools_page_akibara-seo-booster') {
             return;
@@ -186,24 +403,32 @@ class Akibara_SEO_Booster {
             .akibara-seo-wrap { max-width: 1200px; margin: 20px auto; }
             .akibara-card { background: #fff; border: 1px solid #ccd0d4; border-radius: 4px; padding: 20px; margin-bottom: 20px; }
             .akibara-card h2 { margin-top: 0; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-            .akibara-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
+            .akibara-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin: 20px 0; }
             .akibara-stat-box { background: #f8f9fa; padding: 15px; border-radius: 4px; text-align: center; }
             .akibara-stat-box .number { font-size: 32px; font-weight: bold; color: #2271b1; }
-            .akibara-stat-box .label { color: #666; font-size: 14px; }
+            .akibara-stat-box .label { color: #666; font-size: 13px; }
+            .akibara-stat-box.warning .number { color: #dba617; }
+            .akibara-stat-box.error .number { color: #d63638; }
+            .akibara-stat-box.success .number { color: #00a32a; }
             .akibara-progress { height: 20px; background: #e0e0e0; border-radius: 10px; overflow: hidden; margin: 10px 0; }
             .akibara-progress-bar { height: 100%; background: linear-gradient(90deg, #2271b1, #135e96); transition: width 0.3s; }
             .akibara-log { background: #1d2327; color: #fff; padding: 15px; border-radius: 4px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
             .akibara-log .success { color: #00d084; }
             .akibara-log .error { color: #ff6b6b; }
             .akibara-log .info { color: #72aee6; }
-            .akibara-btn { padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+            .akibara-log .warning { color: #f0b849; }
+            .akibara-btn { padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; margin-right: 10px; }
             .akibara-btn-primary { background: #2271b1; color: #fff; border: none; }
             .akibara-btn-primary:hover { background: #135e96; }
             .akibara-btn-secondary { background: #f0f0f1; color: #1d2327; border: 1px solid #c3c4c7; }
+            .akibara-btn-warning { background: #dba617; color: #fff; border: none; }
             .akibara-editorial-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
             .akibara-editorial-item { padding: 10px; background: #f8f9fa; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
             .akibara-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
             @media (max-width: 768px) { .akibara-options-grid { grid-template-columns: 1fr; } }
+            .akibara-alert { padding: 15px; border-radius: 4px; margin-bottom: 15px; }
+            .akibara-alert-warning { background: #fcf9e8; border-left: 4px solid #dba617; }
+            .akibara-alert-info { background: #e7f5fe; border-left: 4px solid #2271b1; }
         ');
     }
 
@@ -214,16 +439,36 @@ class Akibara_SEO_Booster {
         $stats = $this->get_product_stats();
         ?>
         <div class="wrap akibara-seo-wrap">
-            <h1>🚀 Akibara SEO Booster</h1>
+            <h1>Akibara SEO Booster v2.0</h1>
             <p>Optimiza tus productos para alcanzar 100/100 en Rank Math SEO</p>
+
+            <!-- Alerta si hay problemas de texto contextual -->
+            <?php if ($stats['contextual_issues'] > 0): ?>
+            <div class="akibara-alert akibara-alert-warning">
+                <strong>Atención:</strong> Se encontraron <strong><?php echo $stats['contextual_issues']; ?></strong> productos en preventa
+                que mencionan "visita nuestras preventas" incorrectamente. Usa el botón "Corregir Texto Contextual" para arreglarlos.
+            </div>
+            <?php endif; ?>
 
             <!-- Estadísticas -->
             <div class="akibara-card">
-                <h2>📊 Estadísticas de Productos</h2>
+                <h2>Estadísticas de Productos</h2>
                 <div class="akibara-stats">
                     <div class="akibara-stat-box">
                         <div class="number"><?php echo esc_html($stats['total']); ?></div>
                         <div class="label">Total Productos</div>
+                    </div>
+                    <div class="akibara-stat-box">
+                        <div class="number"><?php echo esc_html($stats['preorder']); ?></div>
+                        <div class="label">En Preventa</div>
+                    </div>
+                    <div class="akibara-stat-box">
+                        <div class="number"><?php echo esc_html($stats['available']); ?></div>
+                        <div class="label">Disponibles</div>
+                    </div>
+                    <div class="akibara-stat-box <?php echo $stats['contextual_issues'] > 0 ? 'error' : 'success'; ?>">
+                        <div class="number"><?php echo esc_html($stats['contextual_issues']); ?></div>
+                        <div class="label">Texto Contextual Incorrecto</div>
                     </div>
                     <div class="akibara-stat-box">
                         <div class="number"><?php echo esc_html($stats['without_external_links']); ?></div>
@@ -231,25 +476,21 @@ class Akibara_SEO_Booster {
                     </div>
                     <div class="akibara-stat-box">
                         <div class="number"><?php echo esc_html($stats['short_content']); ?></div>
-                        <div class="label">Contenido Corto (&lt;600 palabras)</div>
-                    </div>
-                    <div class="akibara-stat-box">
-                        <div class="number"><?php echo esc_html($stats['without_power_words']); ?></div>
-                        <div class="label">Sin Power Words</div>
+                        <div class="label">Contenido Corto</div>
                     </div>
                 </div>
             </div>
 
             <!-- Editoriales Configuradas -->
             <div class="akibara-card">
-                <h2>🏢 Editoriales Configuradas</h2>
-                <p>Estos son los enlaces externos que se agregarán según la editorial del producto:</p>
+                <h2>Editoriales Configuradas</h2>
+                <p>Enlaces externos que se agregarán según la editorial del producto:</p>
                 <div class="akibara-editorial-grid">
                     <?php foreach ($this->editorial_links as $slug => $data): ?>
                         <div class="akibara-editorial-item">
                             <span><strong><?php echo esc_html($data['name']); ?></strong></span>
                             <a href="<?php echo esc_url($data['url']); ?>" target="_blank" rel="noopener">
-                                <?php echo esc_html(parse_url($data['url'], PHP_URL_HOST)); ?> ↗
+                                <?php echo esc_html(parse_url($data['url'], PHP_URL_HOST)); ?>
                             </a>
                         </div>
                     <?php endforeach; ?>
@@ -258,7 +499,7 @@ class Akibara_SEO_Booster {
 
             <!-- Opciones de Optimización -->
             <div class="akibara-card">
-                <h2>⚙️ Opciones de Optimización</h2>
+                <h2>Opciones de Optimización</h2>
                 <form id="akibara-seo-form" method="post">
                     <?php wp_nonce_field('akibara_seo_action', 'akibara_nonce'); ?>
 
@@ -269,31 +510,25 @@ class Akibara_SEO_Booster {
                                 <input type="checkbox" name="add_external_links" value="1" checked>
                                 Agregar enlaces externos según editorial (dofollow)
                             </label>
-                            <p class="description">Agrega un enlace al sitio oficial de la editorial en la descripción del producto.</p>
-                        </div>
-
-                        <div>
-                            <h3>Power Words en Título</h3>
-                            <label>
-                                <input type="checkbox" name="add_power_words" value="1" checked>
-                                Agregar power words al título SEO
-                            </label>
-                            <p class="description">Agrega palabras como "Comprar", "Nuevo", "Oferta" al título SEO.</p>
-                            <select name="power_word_type">
-                                <option value="auto">Automático (según stock)</option>
-                                <option value="comprar">Comprar [Título]</option>
-                                <option value="nuevo">Nuevo: [Título]</option>
-                                <option value="oferta">[Título] - Oferta</option>
-                            </select>
+                            <p class="description">Agrega un enlace al sitio oficial de la editorial.</p>
                         </div>
 
                         <div>
                             <h3>Expandir Descripción</h3>
                             <label>
                                 <input type="checkbox" name="expand_description" value="1" checked>
-                                Expandir descripciones cortas
+                                Expandir descripciones cortas (&lt;600 palabras)
                             </label>
-                            <p class="description">Agrega contenido SEO-friendly a productos con menos de 600 palabras.</p>
+                            <p class="description">Agrega contenido SEO-friendly contextual.</p>
+                        </div>
+
+                        <div>
+                            <h3>Corregir Texto Contextual</h3>
+                            <label>
+                                <input type="checkbox" name="fix_contextual" value="1" checked>
+                                Corregir texto según estado (preventa/disponible)
+                            </label>
+                            <p class="description">Arregla el texto "Explora más títulos..." para que sea coherente.</p>
                         </div>
 
                         <div>
@@ -311,6 +546,13 @@ class Akibara_SEO_Booster {
                                 ?>
                             </select>
                             <br><br>
+                            <label>Estado del producto:</label>
+                            <select name="filter_status">
+                                <option value="">Todos</option>
+                                <option value="preorder">Solo Preventa</option>
+                                <option value="available">Solo Disponibles</option>
+                            </select>
+                            <br><br>
                             <label>Límite de productos:</label>
                             <input type="number" name="limit" value="50" min="1" max="500">
                         </div>
@@ -320,10 +562,10 @@ class Akibara_SEO_Booster {
 
                     <p>
                         <button type="submit" name="action" value="preview" class="akibara-btn akibara-btn-secondary">
-                            👁️ Vista Previa
+                            Vista Previa
                         </button>
                         <button type="submit" name="action" value="process" class="akibara-btn akibara-btn-primary">
-                            🚀 Ejecutar Optimización
+                            Ejecutar Optimización
                         </button>
                     </p>
                 </form>
@@ -331,7 +573,7 @@ class Akibara_SEO_Booster {
 
             <!-- Resultados/Log -->
             <div class="akibara-card" id="akibara-results" style="display: none;">
-                <h2>📝 Resultados</h2>
+                <h2>Resultados</h2>
                 <div class="akibara-progress">
                     <div class="akibara-progress-bar" id="akibara-progress" style="width: 0%"></div>
                 </div>
@@ -339,9 +581,9 @@ class Akibara_SEO_Booster {
                 <div class="akibara-log" id="akibara-log"></div>
             </div>
 
-            <!-- Guía de Uso -->
+            <!-- Guía -->
             <div class="akibara-card">
-                <h2>📖 Guía para llegar a 100/100 en Rank Math</h2>
+                <h2>Guía para llegar a 100/100 en Rank Math</h2>
                 <table class="widefat">
                     <thead>
                         <tr>
@@ -352,27 +594,27 @@ class Akibara_SEO_Booster {
                     </thead>
                     <tbody>
                         <tr>
-                            <td>❌ No se han encontrado enlaces externos</td>
-                            <td>✅ Agrega enlace dofollow a editorial oficial</td>
+                            <td>No se han encontrado enlaces externos</td>
+                            <td>Agrega enlace dofollow a editorial oficial</td>
                             <td>+5</td>
                         </tr>
                         <tr>
-                            <td>❌ 0 enlaces salientes dofollow</td>
-                            <td>✅ El enlace a editorial es dofollow</td>
+                            <td>0 enlaces salientes dofollow</td>
+                            <td>El enlace a editorial es dofollow</td>
                             <td>+5</td>
                         </tr>
                         <tr>
-                            <td>❌ Título sin power word</td>
-                            <td>✅ Agrega "Comprar", "Nuevo", etc.</td>
-                            <td>+5</td>
-                        </tr>
-                        <tr>
-                            <td>❌ Contenido menor a 600 palabras</td>
-                            <td>✅ Expande descripción con plantillas SEO</td>
+                            <td>Contenido menor a 600 palabras</td>
+                            <td>Expande descripción con plantillas SEO contextuales</td>
                             <td>+10</td>
                         </tr>
                     </tbody>
                 </table>
+                <br>
+                <div class="akibara-alert akibara-alert-info">
+                    <strong>Nota:</strong> Los power words (Comprar, Nuevo, Oferta) se manejan con badges visuales,
+                    no se agregan al título SEO.
+                </div>
             </div>
         </div>
 
@@ -416,65 +658,66 @@ class Akibara_SEO_Booster {
     }
 
     /**
-     * Obtener estadísticas de productos
+     * =====================================================
+     * ESTADÍSTICAS
+     * =====================================================
      */
+
     public function get_product_stats() {
         global $wpdb;
 
         $stats = [
             'total' => 0,
+            'preorder' => 0,
+            'available' => 0,
+            'contextual_issues' => 0,
             'without_external_links' => 0,
-            'short_content' => 0,
-            'without_power_words' => 0
+            'short_content' => 0
         ];
 
-        // Total de productos
-        $stats['total'] = (int) $wpdb->get_var("
-            SELECT COUNT(*) FROM {$wpdb->posts}
+        // Obtener todos los productos publicados
+        $product_ids = $wpdb->get_col("
+            SELECT ID FROM {$wpdb->posts}
             WHERE post_type = 'product' AND post_status = 'publish'
         ");
 
-        // Productos sin enlaces externos (aproximado - verifica si tiene el meta)
-        $stats['without_external_links'] = (int) $wpdb->get_var("
-            SELECT COUNT(*) FROM {$wpdb->posts} p
-            WHERE p.post_type = 'product'
-            AND p.post_status = 'publish'
-            AND NOT EXISTS (
-                SELECT 1 FROM {$wpdb->postmeta} pm
-                WHERE pm.post_id = p.ID
-                AND pm.meta_key = '_akibara_external_link_added'
-            )
-        ");
+        $stats['total'] = count($product_ids);
 
-        // Productos con contenido corto
-        $products = $wpdb->get_results("
-            SELECT ID, post_content FROM {$wpdb->posts}
-            WHERE post_type = 'product' AND post_status = 'publish'
-        ");
+        foreach ($product_ids as $product_id) {
+            // Contar preventa vs disponible
+            if ($this->is_product_preorder($product_id)) {
+                $stats['preorder']++;
+            } else {
+                $stats['available']++;
+            }
 
-        foreach ($products as $product) {
-            $word_count = str_word_count(strip_tags($product->post_content));
+            // Contar problemas de texto contextual
+            if ($this->has_contextual_text_issue($product_id)) {
+                $stats['contextual_issues']++;
+            }
+
+            // Sin enlaces externos
+            if (!get_post_meta($product_id, '_akibara_external_link_added', true)) {
+                $stats['without_external_links']++;
+            }
+
+            // Contenido corto
+            $post = get_post($product_id);
+            $word_count = str_word_count(strip_tags($post->post_content));
             if ($word_count < 600) {
                 $stats['short_content']++;
             }
         }
 
-        // Productos sin power words en título SEO
-        $power_words_pattern = implode('|', array_merge(...array_values($this->power_words)));
-        $stats['without_power_words'] = (int) $wpdb->get_var($wpdb->prepare("
-            SELECT COUNT(*) FROM {$wpdb->posts} p
-            LEFT JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = 'rank_math_title'
-            WHERE p.post_type = 'product'
-            AND p.post_status = 'publish'
-            AND (pm.meta_value IS NULL OR pm.meta_value NOT REGEXP %s)
-        ", $power_words_pattern));
-
         return $stats;
     }
 
     /**
-     * AJAX: Procesar productos
+     * =====================================================
+     * PROCESAMIENTO AJAX
+     * =====================================================
      */
+
     public function ajax_process_products() {
         check_ajax_referer('akibara_seo_action', 'akibara_nonce');
 
@@ -484,10 +727,10 @@ class Akibara_SEO_Booster {
 
         $is_preview = ($_POST['process_action'] ?? 'preview') === 'preview';
         $add_external_links = isset($_POST['add_external_links']);
-        $add_power_words = isset($_POST['add_power_words']);
         $expand_description = isset($_POST['expand_description']);
-        $power_word_type = sanitize_text_field($_POST['power_word_type'] ?? 'auto');
+        $fix_contextual = isset($_POST['fix_contextual']);
         $filter_brand = intval($_POST['filter_brand'] ?? 0);
+        $filter_status = sanitize_text_field($_POST['filter_status'] ?? '');
         $limit = min(500, max(1, intval($_POST['limit'] ?? 50)));
 
         $log = [];
@@ -510,9 +753,20 @@ class Akibara_SEO_Booster {
         }
 
         $product_ids = get_posts($args);
+
+        // Filtrar por estado si es necesario
+        if ($filter_status === 'preorder') {
+            $product_ids = array_filter($product_ids, [$this, 'is_product_preorder']);
+        } elseif ($filter_status === 'available') {
+            $product_ids = array_filter($product_ids, function($id) {
+                return !$this->is_product_preorder($id);
+            });
+        }
+
+        $product_ids = array_values($product_ids);
         $total = count($product_ids);
 
-        $log[] = ['type' => 'info', 'message' => ($is_preview ? '🔍 MODO VISTA PREVIA' : '🚀 EJECUTANDO OPTIMIZACIÓN')];
+        $log[] = ['type' => 'info', 'message' => ($is_preview ? 'MODO VISTA PREVIA' : 'EJECUTANDO OPTIMIZACIÓN')];
         $log[] = ['type' => 'info', 'message' => "Procesando {$total} productos..."];
 
         foreach ($product_ids as $product_id) {
@@ -520,19 +774,20 @@ class Akibara_SEO_Booster {
             if (!$product) continue;
 
             $product_name = $product->get_name();
+            $status = $this->get_product_status($product_id);
             $changes = [];
 
-            // 1. Agregar enlace externo
-            if ($add_external_links) {
-                $result = $this->add_external_link_to_product($product_id, $is_preview);
+            // 1. Corregir texto contextual
+            if ($fix_contextual) {
+                $result = $this->fix_contextual_text($product_id, $is_preview);
                 if ($result) {
                     $changes[] = $result;
                 }
             }
 
-            // 2. Agregar power word al título SEO
-            if ($add_power_words) {
-                $result = $this->add_power_word_to_title($product_id, $power_word_type, $is_preview);
+            // 2. Agregar enlace externo
+            if ($add_external_links) {
+                $result = $this->add_external_link_to_product($product_id, $is_preview);
                 if ($result) {
                     $changes[] = $result;
                 }
@@ -547,23 +802,30 @@ class Akibara_SEO_Booster {
             }
 
             if (!empty($changes)) {
+                $status_label = $status === 'preventa' ? '[PREVENTA]' : '[DISPONIBLE]';
                 $log[] = [
                     'type' => 'success',
-                    'message' => "✅ [{$product_id}] {$product_name}: " . implode(', ', $changes)
+                    'message' => "{$status_label} [{$product_id}] {$product_name}: " . implode(', ', $changes)
                 ];
                 $processed++;
             }
         }
 
         $log[] = ['type' => 'info', 'message' => "---"];
-        $log[] = ['type' => 'success', 'message' => "📊 Resumen: {$processed}/{$total} productos " . ($is_preview ? 'serían modificados' : 'modificados')];
+        $log[] = ['type' => 'success', 'message' => "Resumen: {$processed}/{$total} productos " . ($is_preview ? 'serían modificados' : 'modificados')];
 
         if ($is_preview) {
-            $log[] = ['type' => 'info', 'message' => "💡 Ejecuta 'Optimización' para aplicar los cambios"];
+            $log[] = ['type' => 'info', 'message' => "Ejecuta 'Optimización' para aplicar los cambios"];
         }
 
         wp_send_json_success(['log' => $log, 'processed' => $processed, 'total' => $total]);
     }
+
+    /**
+     * =====================================================
+     * FUNCIONES DE OPTIMIZACIÓN
+     * =====================================================
+     */
 
     /**
      * Agregar enlace externo basado en la editorial
@@ -605,7 +867,7 @@ class Akibara_SEO_Booster {
         if (!$preview) {
             // Crear el HTML del enlace
             $link_html = sprintf(
-                "\n\n<p class=\"editorial-link\">📚 Conoce más sobre esta editorial: <a href=\"%s\" target=\"_blank\" rel=\"noopener\">%s</a></p>",
+                "\n\n<p class=\"editorial-link\">Conoce más sobre esta editorial: <a href=\"%s\" target=\"_blank\" rel=\"noopener\">%s</a></p>",
                 esc_url($link_data['url']),
                 esc_html($link_data['anchor_text'])
             );
@@ -631,73 +893,11 @@ class Akibara_SEO_Booster {
             ]);
         }
 
-        return "Enlace externo → {$link_data['name']}";
+        return "Enlace externo: {$link_data['name']}";
     }
 
     /**
-     * Agregar power word al título SEO
-     */
-    public function add_power_word_to_title($product_id, $type = 'auto', $preview = false) {
-        $current_title = get_post_meta($product_id, 'rank_math_title', true);
-        $product = wc_get_product($product_id);
-
-        if (!$product) return null;
-
-        // Si no hay título SEO, usar el nombre del producto
-        if (empty($current_title)) {
-            $current_title = $product->get_name();
-        }
-
-        // Verificar si ya tiene power word
-        $all_power_words = array_merge(...array_values($this->power_words));
-        foreach ($all_power_words as $pw) {
-            if (stripos($current_title, $pw) !== false) {
-                return null; // Ya tiene power word
-            }
-        }
-
-        // Seleccionar power word según tipo
-        $power_word = 'Comprar';
-        $new_title = '';
-
-        switch ($type) {
-            case 'comprar':
-                $new_title = "Comprar {$current_title}";
-                $power_word = 'Comprar';
-                break;
-            case 'nuevo':
-                $new_title = "Nuevo: {$current_title}";
-                $power_word = 'Nuevo';
-                break;
-            case 'oferta':
-                $new_title = "{$current_title} - Oferta";
-                $power_word = 'Oferta';
-                break;
-            case 'auto':
-            default:
-                // Lógica automática basada en el producto
-                if ($product->is_on_sale()) {
-                    $new_title = "{$current_title} - Oferta";
-                    $power_word = 'Oferta';
-                } elseif ($product->get_stock_quantity() !== null && $product->get_stock_quantity() < 5) {
-                    $new_title = "{$current_title} - Últimas Unidades";
-                    $power_word = 'Últimas Unidades';
-                } else {
-                    $new_title = "Comprar {$current_title}";
-                    $power_word = 'Comprar';
-                }
-                break;
-        }
-
-        if (!$preview) {
-            update_post_meta($product_id, 'rank_math_title', $new_title);
-        }
-
-        return "Power word: '{$power_word}'";
-    }
-
-    /**
-     * Expandir descripción del producto
+     * Expandir descripción del producto con contenido contextual
      */
     public function expand_product_description($product_id, $preview = false) {
         $post = get_post($product_id);
@@ -706,6 +906,11 @@ class Akibara_SEO_Booster {
 
         // Solo expandir si tiene menos de 600 palabras
         if ($word_count >= 600) {
+            return null;
+        }
+
+        // Ya fue expandido?
+        if (get_post_meta($product_id, '_akibara_description_expanded', true)) {
             return null;
         }
 
@@ -725,23 +930,35 @@ class Akibara_SEO_Booster {
         // Usar plantilla según género
         $template = $this->description_templates[$genre] ?? $this->description_templates['default'];
         $product_name = get_the_title($product_id);
+        $is_preorder = $this->is_product_preorder($product_id);
 
         // Construir contenido adicional
-        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster -->\n";
+        $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2 -->\n";
         $additional_content .= "<div class=\"seo-description\">\n";
-        $additional_content .= "<h3>Sobre este manga</h3>\n";
+
+        // Encabezado contextual
+        if ($is_preorder) {
+            $additional_content .= "<h3>Sobre este manga (Preventa)</h3>\n";
+            $preorder_date = $this->get_preorder_date($product_id);
+            if ($preorder_date) {
+                $additional_content .= "<p><strong>Disponible a partir del {$preorder_date}</strong></p>\n";
+            }
+        } else {
+            $additional_content .= "<h3>Sobre este manga</h3>\n";
+        }
+
         $additional_content .= "<p>" . str_replace('{title}', $product_name, $template['intro']) . "</p>\n";
         $additional_content .= "<p>" . $template['content'] . "</p>\n";
         $additional_content .= "<h3>Características de esta edición</h3>\n";
         $additional_content .= "<p>" . $template['features'] . "</p>\n";
 
-        // Agregar información adicional basada en atributos del producto
+        // Agregar información adicional
         $product = wc_get_product($product_id);
         if ($product) {
             $additional_content .= "<h3>Detalles del producto</h3>\n";
             $additional_content .= "<ul>\n";
 
-            // Obtener autor si existe
+            // Autor
             $autor = $product->get_attribute('pa_autor');
             if ($autor) {
                 $additional_content .= "<li><strong>Autor:</strong> {$autor}</li>\n";
@@ -759,13 +976,34 @@ class Akibara_SEO_Booster {
                 $additional_content .= "<li><strong>ISBN/SKU:</strong> {$sku}</li>\n";
             }
 
+            // Estado
+            $additional_content .= "<li><strong>Estado:</strong> " . ($is_preorder ? 'Preventa' : 'Disponible') . "</li>\n";
+
             $additional_content .= "</ul>\n";
         }
 
         $additional_content .= "</div>\n";
 
+        // Agregar el texto contextual al final
+        $additional_content .= $this->generate_contextual_footer($product_id);
+
         if (!$preview) {
+            // Primero, remover cualquier texto contextual viejo
+            $content = preg_replace(
+                '/<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>.*?<\/p>/is',
+                '',
+                $content
+            );
+
+            // También remover el texto viejo sin clase
+            $content = preg_replace(
+                '/<p>Explora más títulos en nuestra.*?(?:preventas|manga)<\/a>\.<\/p>/is',
+                '',
+                $content
+            );
+
             $new_content = $content . $additional_content;
+
             wp_update_post([
                 'ID' => $product_id,
                 'post_content' => $new_content
@@ -773,19 +1011,19 @@ class Akibara_SEO_Booster {
 
             update_post_meta($product_id, '_akibara_description_expanded', [
                 'original_words' => $word_count,
-                'date' => current_time('mysql')
+                'date' => current_time('mysql'),
+                'status' => $this->get_product_status($product_id)
             ]);
         }
 
         $new_word_count = str_word_count(strip_tags($content . $additional_content));
-        return "Descripción: {$word_count} → ~{$new_word_count} palabras";
+        return "Descripción expandida: {$word_count} → ~{$new_word_count} palabras";
     }
 
     /**
      * Normalizar slug de editorial
      */
     private function normalize_slug($slug) {
-        // Convertir variaciones comunes
         $slug = strtolower($slug);
         $slug = str_replace(['_', ' '], '-', $slug);
         $slug = preg_replace('/[^a-z0-9-]/', '', $slug);
@@ -793,27 +1031,7 @@ class Akibara_SEO_Booster {
     }
 
     /**
-     * Hook: Mostrar enlace externo en descripción del producto (frontend)
-     */
-    public function append_external_link_to_description($description) {
-        global $product;
-
-        if (!$product || !is_product()) {
-            return $description;
-        }
-
-        $link_data = get_post_meta($product->get_id(), '_akibara_external_link_added', true);
-
-        if (!empty($link_data) && isset($link_data['url'])) {
-            // El enlace ya está en el contenido, no agregarlo de nuevo
-            return $description;
-        }
-
-        return $description;
-    }
-
-    /**
-     * Hook: Mostrar enlace de editorial después del resumen del producto
+     * Hook: Mostrar enlace de editorial en frontend
      */
     public function display_external_editorial_link() {
         global $product;
@@ -830,7 +1048,6 @@ class Akibara_SEO_Booster {
         $brand = $brands[0];
         $brand_slug = $this->normalize_slug($brand->slug);
 
-        // Buscar en mapeo
         $link_data = null;
         if (isset($this->editorial_links[$brand_slug])) {
             $link_data = $this->editorial_links[$brand_slug];
@@ -845,32 +1062,24 @@ class Akibara_SEO_Booster {
 
         if ($link_data) {
             echo '<div class="editorial-info" style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 5px;">';
-            echo '<p style="margin: 0;"><strong>📚 Editorial:</strong> ';
+            echo '<p style="margin: 0;"><strong>Editorial:</strong> ';
             echo '<a href="' . esc_url($link_data['url']) . '" target="_blank" rel="noopener">' . esc_html($link_data['name']) . '</a>';
             echo '</p></div>';
         }
     }
 
-    /**
-     * Hook: Mejorar producto automáticamente al guardar (opcional)
-     */
     public function maybe_enhance_product_on_save($product_id) {
-        // Verificar si el auto-enhance está habilitado
         if (!get_option('akibara_seo_auto_enhance', false)) {
             return;
         }
 
-        // Agregar enlace externo si no tiene
         if (!get_post_meta($product_id, '_akibara_external_link_added', true)) {
             $this->add_external_link_to_product($product_id);
         }
     }
 
-    /**
-     * Manejar acciones de administración
-     */
     public function handle_admin_actions() {
-        // Placeholder para acciones futuras
+        // Placeholder
     }
 }
 
@@ -882,14 +1091,13 @@ function akibara_seo_booster_init() {
 }
 add_action('plugins_loaded', 'akibara_seo_booster_init');
 
-// Activación del plugin
+// Activación
 register_activation_hook(__FILE__, function() {
-    // Crear opciones por defecto
     add_option('akibara_seo_auto_enhance', false);
-    add_option('akibara_seo_version', '1.0.0');
+    add_option('akibara_seo_version', '2.0.0');
 });
 
-// Desactivación del plugin
+// Desactivación
 register_deactivation_hook(__FILE__, function() {
-    // Limpiar opciones si es necesario
+    // Limpieza si es necesario
 });
