@@ -904,8 +904,8 @@ class Akibara_SEO_Booster {
             '/<p><strong>Disponible a partir del [^<]+<\/strong><\/p>/i',
             // Lista con Estado: Preventa o Disponible
             '/<li><strong>Estado:<\/strong>\s*(Preventa|Disponible)<\/li>/i',
-            // Texto contextual "Explora más títulos..." con link a preventas
-            '/Explora más títulos en nuestra.*?preventas<\/a>\./is',
+            // Texto contextual "Explora más títulos..." (cualquier variante)
+            '/Explora más títulos en nuestra.*?<\/a>\./is',
             // Footer contextual viejo
             '/<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>.*?<\/p>/is',
             // Línea de "Editorial: [nombre]" en formato antiguo
@@ -970,15 +970,23 @@ class Akibara_SEO_Booster {
 
         // 5. Remover texto "Explora más títulos..." (varias variantes)
         $patterns = [
-            '/<p>Explora más títulos en nuestra.*?preventas<\/a>\.<\/p>\s*/is',
-            '/<p>Explora más títulos en nuestra.*?manga<\/a>\.<\/p>\s*/is',
+            // Con clase akibara-contextual-footer
+            '/<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>.*?Explora más títulos.*?<\/p>\s*/is',
+            // Párrafo simple con preventas
+            '/<p[^>]*>Explora más títulos en nuestra.*?preventas<\/a>\.<\/p>\s*/is',
+            // Párrafo simple con manga
+            '/<p[^>]*>Explora más títulos en nuestra.*?manga<\/a>\.<\/p>\s*/is',
+            // Párrafo simple con cómics
+            '/<p[^>]*>Explora más títulos en nuestra.*?cómics<\/a>\.<\/p>\s*/is',
+            // Párrafo simple con catálogo
+            '/<p[^>]*>Explora más títulos en nuestra.*?catálogo<\/a>\.<\/p>\s*/is',
+            // Texto suelto (sin párrafo)
             '/Explora más títulos en nuestra <a[^>]*>[^<]+<\/a>( o visita nuestras <a[^>]*>preventas<\/a>)?\.\s*/is',
         ];
         foreach ($patterns as $pattern) {
             if (preg_match($pattern, $content)) {
                 $content = preg_replace($pattern, '', $content);
                 $changes[] = 'Removido texto "Explora más..."';
-                break;
             }
         }
 
