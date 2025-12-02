@@ -908,6 +908,10 @@ class Akibara_SEO_Booster {
             '/Explora más títulos en nuestra.*?preventas<\/a>\./is',
             // Footer contextual viejo
             '/<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>.*?<\/p>/is',
+            // Línea de "Editorial: [nombre]" en formato antiguo
+            '/<p[^>]*>\s*<strong>Editorial:<\/strong>\s*[^<]+<\/p>/i',
+            // Variante sin strong
+            '/<p[^>]*>Editorial:\s*[^<]+<\/p>/i',
         ];
 
         foreach ($legacy_patterns as $pattern) {
@@ -974,6 +978,19 @@ class Akibara_SEO_Booster {
             if (preg_match($pattern, $content)) {
                 $content = preg_replace($pattern, '', $content);
                 $changes[] = 'Removido texto "Explora más..."';
+                break;
+            }
+        }
+
+        // 6. Remover línea de "Editorial: [nombre]" en formato antiguo
+        $editorial_patterns = [
+            '/<p[^>]*>\s*<strong>Editorial:<\/strong>\s*[^<]+<\/p>\s*/i',
+            '/<p[^>]*>Editorial:\s*[^<]+<\/p>\s*/i',
+        ];
+        foreach ($editorial_patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+                $content = preg_replace($pattern, '', $content);
+                $changes[] = 'Removido "Editorial: ..."';
                 break;
             }
         }
