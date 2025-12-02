@@ -908,6 +908,11 @@ class Akibara_SEO_Booster {
             '/Explora más títulos en nuestra.*?preventas<\/a>\./is',
             // Footer contextual viejo
             '/<p[^>]*class=["\']?akibara-contextual-footer["\']?[^>]*>.*?<\/p>/is',
+            // Formatos antiguos con Editorial:
+            '/<li><strong>Editorial:<\/strong>\s*[^<]+<\/li>/i',
+            '/<p><strong>Editorial:<\/strong>\s*[^<]+<\/p>/i',
+            '/<p>Editorial:\s*[^<]+<\/p>/i',
+            '/<(div|span)[^>]*>Editorial:\s*[^<]+<\/(div|span)>/i',
         ];
 
         foreach ($legacy_patterns as $pattern) {
@@ -975,6 +980,24 @@ class Akibara_SEO_Booster {
                 $content = preg_replace($pattern, '', $content);
                 $changes[] = 'Removido texto "Explora más..."';
                 break;
+            }
+        }
+
+        // 6. Remover item de lista con Editorial (formato antiguo)
+        $editorial_patterns = [
+            // Formato: <li><strong>Editorial:</strong> Nombre</li>
+            '/<li><strong>Editorial:<\/strong>\s*[^<]+<\/li>\s*/i',
+            // Formato: <p><strong>Editorial:</strong> Nombre</p>
+            '/<p><strong>Editorial:<\/strong>\s*[^<]+<\/p>\s*/i',
+            // Formato: <p>Editorial: Nombre</p>
+            '/<p>Editorial:\s*[^<]+<\/p>\s*/i',
+            // Formato en div o span
+            '/<(div|span)[^>]*>Editorial:\s*[^<]+<\/(div|span)>\s*/i',
+        ];
+        foreach ($editorial_patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+                $content = preg_replace($pattern, '', $content);
+                $changes[] = 'Removido "Editorial:" antiguo';
             }
         }
 
