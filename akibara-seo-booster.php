@@ -1060,79 +1060,25 @@ class Akibara_SEO_Booster {
             return null;
         }
 
-        // Detectar tipo y género del producto usando la nueva función
+        // Detectar género del producto para usar plantilla correcta
         $product_type_info = $this->get_product_type($product_id);
         $genre = $product_type_info['genre'];
-        $type = $product_type_info['type'];
-        $type_label = $product_type_info['label'];
 
         // Usar plantilla según género/tipo
         $template = $this->description_templates[$genre] ?? $this->description_templates['default'];
         $product_name = get_the_title($product_id);
-        $is_preorder = $this->is_product_preorder($product_id);
 
         // Construir contenido adicional
         $additional_content = "\n\n<!-- SEO Content Added by Akibara SEO Booster v2.2 -->\n";
         $additional_content .= "<div class=\"seo-description\">\n";
 
-        // Encabezado contextual según TIPO (manga/comics/manhwa) y ESTADO (preventa/disponible)
-        $type_titles = [
-            'manga' => 'manga',
-            'comics' => 'cómic',
-            'manhwa' => 'manhwa',
-            'general' => 'producto'
-        ];
-        $title_type = $type_titles[$type] ?? 'producto';
-
-        if ($is_preorder) {
-            $additional_content .= "<h3>Sobre este {$title_type} (Preventa)</h3>\n";
-            $preorder_date = $this->get_preorder_date($product_id);
-            if ($preorder_date) {
-                $additional_content .= "<p><strong>Disponible a partir del {$preorder_date}</strong></p>\n";
-            }
-        } else {
-            $additional_content .= "<h3>Sobre este {$title_type}</h3>\n";
-        }
-
+        // Contenido SEO sin encabezados ni detalles del producto
         $additional_content .= "<p>" . str_replace('{title}', $product_name, $template['intro']) . "</p>\n";
         $additional_content .= "<p>" . $template['content'] . "</p>\n";
         $additional_content .= "<h3>Características de esta edición</h3>\n";
         $additional_content .= "<p>" . $template['features'] . "</p>\n";
 
-        // Agregar información adicional
-        $product = wc_get_product($product_id);
-        if ($product) {
-            $additional_content .= "<h3>Detalles del producto</h3>\n";
-            $additional_content .= "<ul>\n";
-
-            // Autor
-            $autor = $product->get_attribute('pa_autor');
-            if ($autor) {
-                $additional_content .= "<li><strong>Autor:</strong> {$autor}</li>\n";
-            }
-
-            // Editorial
-            $brands = wp_get_post_terms($product_id, 'product_brand', ['fields' => 'names']);
-            if (!empty($brands)) {
-                $additional_content .= "<li><strong>Editorial:</strong> " . implode(', ', $brands) . "</li>\n";
-            }
-
-            // SKU
-            $sku = $product->get_sku();
-            if ($sku) {
-                $additional_content .= "<li><strong>ISBN/SKU:</strong> {$sku}</li>\n";
-            }
-
-            // Estado
-            $additional_content .= "<li><strong>Estado:</strong> " . ($is_preorder ? 'Preventa' : 'Disponible') . "</li>\n";
-
-            $additional_content .= "</ul>\n";
-        }
-
         $additional_content .= "</div>\n";
-
-        // Agregar el texto contextual al final
-        $additional_content .= $this->generate_contextual_footer($product_id);
 
         if (!$preview) {
             // Primero, remover cualquier texto contextual viejo
